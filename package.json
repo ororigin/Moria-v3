@@ -1,0 +1,37 @@
+{
+  "name": "moria-v3",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "scripts": {
+    "build": "tsc",
+    "build:bots": "cd bots && tsc",
+    "build:bots:prod": "cd bots && tsc --project tsconfig.prod.json",
+    "watch:bots": "cd bots && tsc --watch",
+    "dev:bots": "concurrently \"npm run watch:bots\" \"npm run serve:bots\"",
+    "serve:bots": "nodemon --watch bots/dist ./bots/dist/bot.js",
+    "start": "node dist/index.js",
+    "dev": "ts-node index.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "concurrently": "^9.2.1",
+    "mineflayer": "^4.37.0",
+    "nodemon": "^3.1.14",
+    "resolve-tspaths": "^0.8.23",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.2"
+  },
+  "type": "module",
+  "dependencies": {
+    "@types/archiver": "^7.0.0",
+    "archiver": "^8.0.0",
+    "dayjs": "^1.11.20",
+    "env-paths": "^4.0.0",
+    "fastify": "^5.8.5",
+    "fs": "^0.0.1-security"
+  }
+}
