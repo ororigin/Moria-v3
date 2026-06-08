@@ -72,7 +72,7 @@ export class BotManager {
       setImmediate(() => this.onWhisper(username, message));
     });
 
-    // 自动注册/登录的消息监听
+    // 自动注册/登录的消息监听.
     bot.on('messagestr', (message) => {
       if (message.includes('/reg') && message.includes('注册')) {
         bot.chat(`/reg ${this.config.password} ${this.config.password}@outlook.com`);
