@@ -1,1 +1,0 @@
-{"version":3,"file":"IConfigTemplate.d.ts","sourceRoot":"","sources":["IConfigTemplate.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,OAAO,EAAE,MAAM,cAAc,CAAC;AAE5C;;;;;GAKG;AACH,MAAM,WAAW,eAAe,CAAC,CAAC,SAAS,OAAO;IAChD,sBAAsB;IACtB,UAAU,CAAC,IAAI,EAAE,MAAM,GAAG,CAAC,CAAC;IAE5B,wCAAwC;IACxC,SAAS,IAAI,MAAM,CAAC;CACrB"}
