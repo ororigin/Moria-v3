@@ -20,4 +20,3 @@ export { FileConfigManager } from "./managers/FileConfigManager.js";
 // ─── 工厂 ────────────────────────────────────────────────────────────────────
 export { ConfigManagerFactory } from "./factory/ConfigManagerFactory.js";
 export { ConfigType } from "./factory/ConfigType.js";
-//# sourceMappingURL=index.js.map

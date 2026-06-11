@@ -19,4 +19,3 @@ export class SystemConfigTemplate {
         };
     }
 }
-//# sourceMappingURL=SystemConfigTemplate.js.map

@@ -7,4 +7,3 @@ export function createTransport() {
     }
     return new StdioTransport();
 }
-//# sourceMappingURL=createTransport.js.map

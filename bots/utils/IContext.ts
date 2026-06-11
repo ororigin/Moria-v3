@@ -1,19 +1,38 @@
 import type { Bot } from 'mineflayer';
 
+/**
+ * Bot 运行时配置
+ * 必须与 storage/config/types/BotConfig.ts 保持字段一致
+ */
+export interface BotRuntimeConfig {
+  botId: string;
+  name: string;
+  host: string;
+  server: string;
+  port: number;
+  password: string;
+
+  // ─── 重连策略 ────────────────────────────────────────────────────────────
+  autoReconnect: boolean;
+  maxReconnect: number;
+  reconnectInterval: number;
+
+  // ─── 通用 Bot 信息 ────────────────────────────────────────────────────────
+  displayName: string;
+  token: string;
+  commandPrefix: string;
+  enabled: boolean;
+  maxRetries: number;
+  permissions: string[];
+  webhookUrl: string | null;
+
+  // ─── 时间戳（由配置管理器维护） ──────────────────────────────────────────
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface IContext {
   bot: Bot | null;
-  config: {
-    botId: string;
-    name: string;
-    host: string;
-    port: number;
-    password: string;
-    max_reconnect?: number; // 最大重连次数（优先级）
-    maxReconnect?: number; // 驼峰兼容字段
-    auto_reconnect?: boolean; // 是否自动重连（snake_case 兼容）
-    autoReconnect?: boolean; // 是否自动重连（camelCase）
-    reconnect_interval?: number; // 重连间隔，单位毫秒（snake_case）
-    reconnectInterval?: number; // 重连间隔，单位毫秒（camelCase）
-  };
+  config: BotRuntimeConfig;
   getBot() : Bot;
 }

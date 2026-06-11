@@ -86,37 +86,23 @@ export class BotManager {
     scheduleReconnect() {
         if (this.reconnectTimer)
             return;
-        const auto = typeof this.config.auto_reconnect === 'boolean'
-            ? this.config.auto_reconnect
-            : typeof this.config.autoReconnect === 'boolean'
-                ? this.config.autoReconnect
-                : true;
-        if (!auto) {
+        const { autoReconnect, maxReconnect, reconnectInterval } = this.config;
+        if (!autoReconnect) {
             this.sendLog('自动重连已被禁用，进程退出');
             this.shutdown();
             return;
         }
-        const max = typeof this.config.max_reconnect === 'number'
-            ? this.config.max_reconnect
-            : typeof this.config.maxReconnect === 'number'
-                ? this.config.maxReconnect
-                : 5;
-        const interval = typeof this.config.reconnect_interval === 'number'
-            ? this.config.reconnect_interval
-            : typeof this.config.reconnectInterval === 'number'
-                ? this.config.reconnectInterval
-                : 5000;
-        if (this.reconnectAttempts >= max) {
-            this.sendLog(`达到最大重连次数 (${this.reconnectAttempts}/${max})，退出进程`);
+        if (this.reconnectAttempts >= maxReconnect) {
+            this.sendLog(`达到最大重连次数 (${this.reconnectAttempts}/${maxReconnect})，退出进程`);
             this.shutdown();
             return;
         }
         this.reconnectAttempts++;
-        this.sendLog(`将在${interval / 1000}秒后重连 (${this.reconnectAttempts}/${max})`);
+        this.sendLog(`将在${reconnectInterval / 1000}秒后重连 (${this.reconnectAttempts}/${maxReconnect})`);
         this.reconnectTimer = setTimeout(() => {
             this.reconnectTimer = null;
             this.createBot();
-        }, interval);
+        }, reconnectInterval);
     }
     // 特权操作：立即退出
     shutdown() {
@@ -129,4 +115,3 @@ export class BotManager {
             process.exit(0);
     }
 }
-//# sourceMappingURL=BotManager.js.map

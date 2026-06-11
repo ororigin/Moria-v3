@@ -1,4 +1,4 @@
-import { CommandHandler } from '../moudles/Commands.js';
+import { CommandHandler } from '../modules/Commands.js';
 export class CommandDispatcher {
     handler;
     constructor(context, warningHandler) {

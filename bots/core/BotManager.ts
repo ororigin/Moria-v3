@@ -88,40 +88,25 @@ export class BotManager {
   private scheduleReconnect(): void {
     if (this.reconnectTimer) return;
 
-    const auto = typeof (this.config as any).auto_reconnect === 'boolean'
-      ? (this.config as any).auto_reconnect
-      : typeof (this.config as any).autoReconnect === 'boolean'
-        ? (this.config as any).autoReconnect
-        : true;
-    if (!auto) {
+    const { autoReconnect, maxReconnect, reconnectInterval } = this.config;
+
+    if (!autoReconnect) {
       this.sendLog('自动重连已被禁用，进程退出');
       this.shutdown();
       return;
     }
 
-    const max = typeof (this.config as any).max_reconnect === 'number'
-      ? (this.config as any).max_reconnect
-      : typeof (this.config as any).maxReconnect === 'number'
-        ? (this.config as any).maxReconnect
-        : 5;
-
-    const interval = typeof (this.config as any).reconnect_interval === 'number'
-      ? (this.config as any).reconnect_interval
-      : typeof (this.config as any).reconnectInterval === 'number'
-        ? (this.config as any).reconnectInterval
-        : 5000;
-
-    if (this.reconnectAttempts >= max) {
-      this.sendLog(`达到最大重连次数 (${this.reconnectAttempts}/${max})，退出进程`);
+    if (this.reconnectAttempts >= maxReconnect) {
+      this.sendLog(`达到最大重连次数 (${this.reconnectAttempts}/${maxReconnect})，退出进程`);
       this.shutdown();
       return;
     }
     this.reconnectAttempts++;
-    this.sendLog(`将在${interval / 1000}秒后重连 (${this.reconnectAttempts}/${max})`);
+    this.sendLog(`将在${reconnectInterval / 1000}秒后重连 (${this.reconnectAttempts}/${maxReconnect})`);
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.createBot();
-    }, interval);
+    }, reconnectInterval);
   }
 
   // 特权操作：立即退出

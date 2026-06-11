@@ -29,4 +29,3 @@ export class IpcTransport {
         // IPC 通道由系统管理，通常无需显式关闭
     }
 }
-//# sourceMappingURL=IpcTransport.js.map

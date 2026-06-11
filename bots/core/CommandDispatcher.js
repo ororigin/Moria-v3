@@ -11,4 +11,3 @@ export class CommandDispatcher {
         this.handler.abortCurrentAndClear();
     }
 }
-//# sourceMappingURL=CommandDispatcher.js.map

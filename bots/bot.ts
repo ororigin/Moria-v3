@@ -1,36 +1,36 @@
-import type { IContext } from './utils/IContext.js';
+import type { IContext, BotRuntimeConfig } from './utils/IContext.js';
 import { BotManager } from './core/BotManager.js';
 import { CommandDispatcher } from './core/CommandDispatcher.js';
 import { CommandResolver } from './modules/CommandResolver.js';
 import { Command } from './modules/Commands.js';
 import { createTransport } from './transports/createTransport.js';
-import { isM2CProcessTransportData, type C2MProcessTransportData } from './type/transport.js';
+import { isM2CProcessTransportData, type C2MProcessTransportData, type M2CProcessTransportData } from './type/transport.js';
 
 // 支持两种初始化方式：
 // 1) 旧的 argv 方式: node bot.js <botId> <name> <host> <port> [password]
-// 2) 父进程通过 IPC 发送初始化消息: { type: 'init', config: { botId, name, host, port, password, ... } }
+// 2) 父进程通过 IPC 发送初始化消息: { type: 'init', config: { ... } }
 
 async function main() {
   // 尝试从 argv 解析
-  let botId = process.argv[2];
-  let name = process.argv[3];
-  let host = process.argv[4];
-  let port = process.argv[5] ? parseInt(process.argv[5]) : NaN;
-  let password = process.argv[6];
+  const botId = process.argv[2];
+  const name = process.argv[3];
+  const host = process.argv[4];
+  const port = process.argv[5] ? parseInt(process.argv[5]) : NaN;
+  const password = process.argv[6];
 
-  let config: any | null = null;
+  let config: Partial<BotRuntimeConfig> | null = null;
 
   if (botId && name && host && !isNaN(port)) {
     config = { botId, name, host, port, password: password || 'ufdbfcir' };
   } else {
     // 等待父进程通过 IPC 发来初始化配置（10s 超时）
-    config = await new Promise((resolve, reject) => {
+    config = await new Promise<Partial<BotRuntimeConfig> | null>((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('no-init-config')), 10000);
       const handler = (msg: any) => {
-        if (msg && typeof msg === 'object' && (msg.type === 'init' || msg.type === 'config') && msg.config) {
+        if (msg && typeof msg === 'object' && msg.type === 'init' && msg.config) {
           clearTimeout(timeout);
           process.off('message', handler);
-          resolve(msg.config);
+          resolve(msg.config as Partial<BotRuntimeConfig>);
         }
       };
       process.on('message', handler);
@@ -43,13 +43,25 @@ async function main() {
   }
 
   // 规范化并填充默认值
-  const cfg = {
-    botId: config.botId,
-    name: config.name,
-    host: config.host || config.server || config.hostname,
-    port: Number(config.port),
+  const cfg: BotRuntimeConfig = {
+    botId: config.botId ?? '',
+    name: config.name ?? '',
+    host: config.host || config.server || '',
+    server: config.server || config.host || '',
+    port: Number(config.port) || 25565,
     password: config.password || 'ufdbfcir',
-    ...config,
+    autoReconnect: config.autoReconnect ?? true,
+    maxReconnect: config.maxReconnect ?? 5,
+    reconnectInterval: config.reconnectInterval ?? 5000,
+    displayName: config.displayName ?? config.name ?? `Bot-${config.botId}`,
+    token: config.token ?? '',
+    commandPrefix: config.commandPrefix ?? '!',
+    enabled: config.enabled ?? true,
+    maxRetries: config.maxRetries ?? 3,
+    permissions: config.permissions ?? ['read', 'write'],
+    webhookUrl: config.webhookUrl ?? null,
+    createdAt: config.createdAt ?? new Date().toISOString(),
+    updatedAt: config.updatedAt ?? new Date().toISOString(),
   };
 
   // 上下文
@@ -64,6 +76,27 @@ async function main() {
 
   // 初始化传输层
   const transport = createTransport();
+
+  // ─── 配置同步辅助函数 ─────────────────────────────────────────────────────
+
+  /**
+   * 向父进程上报配置变更
+   * @param patch  发生变更的配置字段
+   */
+  function sendConfigUpdate(patch: Partial<BotRuntimeConfig>): void {
+    sendOutput('config:update', { config: patch });
+  }
+
+  /**
+   * 应用父进程推送的配置更新（深度合并到当前 cfg）
+   * @param patch  父进程下发的配置字段
+   */
+  function applyConfigPush(patch: Partial<BotRuntimeConfig>): void {
+    Object.assign(cfg, patch);
+    sendOutput('log', { message: `配置已更新: ${Object.keys(patch).join(', ')}` });
+    // 发送确认
+    sendOutput('config:update:ack', { config: patch });
+  }
 
   // 输出辅助函数
   function sendOutput(type: string, data: any = {}): void {
@@ -140,6 +173,12 @@ async function main() {
       //获取pid
       case 'internal:pid':
         sendOutput('internal', { internalType: 'pid', message: { pid: process.pid } });
+        return;
+      // 父进程推送配置更新
+      case 'config:push':
+        if (msg.config && typeof msg.config === 'object') {
+          applyConfigPush(msg.config as Partial<BotRuntimeConfig>);
+        }
         return;
     }
     try {

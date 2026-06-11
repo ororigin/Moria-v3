@@ -1,4 +1,4 @@
-import { Command, TerminateCommand } from './Commands.js';
+import { TerminateCommand } from './Commands.js';
 import { SayCommand, TpaCommand, MountMinecartCommand, DismountCommand, UseCommandCommand, HelpCommand, } from './commands/index.js';
 export class CommandResolver {
     // 解析游戏内私聊（以 # 开头）

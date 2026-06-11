@@ -1,3 +1,7 @@
+// ============================================================
+// 🚨 此文件为 type/transport.ts 的副本，必须保持同步！
+// 修改根目录的 type/transport.ts 后请同步更新此文件。
+// ============================================================
 //类型守卫：判断数据是否为有效的 M2CProcessTransportData
 export function isM2CProcessTransportData(data) {
     return data && typeof data === 'object' && typeof data.type === 'string';

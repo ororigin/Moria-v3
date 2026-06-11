@@ -21,4 +21,3 @@ export function isInternalData(data) {
         typeof data.type === 'string' &&
         typeof data.message === 'object' && data.message !== null);
 }
-//# sourceMappingURL=transport.js.map

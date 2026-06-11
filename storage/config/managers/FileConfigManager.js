@@ -104,4 +104,3 @@ function deepMerge(base, patch) {
 function isPlainObject(val) {
     return typeof val === "object" && val !== null && !Array.isArray(val);
 }
-//# sourceMappingURL=FileConfigManager.js.map

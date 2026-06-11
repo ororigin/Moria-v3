@@ -11,4 +11,3 @@ export var ConfigType;
     /** Bot 实例配置 */
     ConfigType["BOT"] = "bot";
 })(ConfigType || (ConfigType = {}));
-//# sourceMappingURL=ConfigType.js.map

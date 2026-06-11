@@ -3,17 +3,20 @@ export class BotManager {
     config;
     dispatcher;
     onWhisper;
+    sendLog;
+    sendStatus;
     bot = null;
     reconnectAttempts = 0;
     reconnectTimer;
     shouldExit = false;
-    MAX_RECONNECT = 5;
     context;
     constructor(config, dispatcher, // 用于清空队列和中断持久命令
-    onWhisper) {
+    onWhisper, sendLog = () => { }, sendStatus = () => { }) {
         this.config = config;
         this.dispatcher = dispatcher;
         this.onWhisper = onWhisper;
+        this.sendLog = sendLog;
+        this.sendStatus = sendStatus;
         this.context = { bot: null, config, getBot() {
                 if (!this.bot)
                     throw new Error('Context not fully initialized');
@@ -70,10 +73,10 @@ export class BotManager {
         bot.on('whisper', (username, message) => {
             setImmediate(() => this.onWhisper(username, message));
         });
-        // 自动注册/登录的消息监听（可选，直接处理）
+        // 自动注册/登录的消息监听.
         bot.on('messagestr', (message) => {
             if (message.includes('/reg') && message.includes('注册')) {
-                bot.chat('/reg ufdbfcir ufdbfcir@outlook.com');
+                bot.chat(`/reg ${this.config.password} ${this.config.password}@outlook.com`);
             }
             if (message.includes('/l') || message.includes('登录')) {
                 bot.chat(`/l ${this.config.password}`);
@@ -83,17 +86,23 @@ export class BotManager {
     scheduleReconnect() {
         if (this.reconnectTimer)
             return;
-        if (this.reconnectAttempts >= this.MAX_RECONNECT) {
-            this.sendLog(`达到最大重连次数，退出进程`);
+        const { autoReconnect, maxReconnect, reconnectInterval } = this.config;
+        if (!autoReconnect) {
+            this.sendLog('自动重连已被禁用，进程退出');
+            this.shutdown();
+            return;
+        }
+        if (this.reconnectAttempts >= maxReconnect) {
+            this.sendLog(`达到最大重连次数 (${this.reconnectAttempts}/${maxReconnect})，退出进程`);
             this.shutdown();
             return;
         }
         this.reconnectAttempts++;
-        this.sendLog(`将在5秒后重连 (${this.reconnectAttempts}/${this.MAX_RECONNECT})`);
+        this.sendLog(`将在${reconnectInterval / 1000}秒后重连 (${this.reconnectAttempts}/${maxReconnect})`);
         this.reconnectTimer = setTimeout(() => {
             this.reconnectTimer = null;
             this.createBot();
-        }, 5000);
+        }, reconnectInterval);
     }
     // 特权操作：立即退出
     shutdown() {
@@ -105,6 +114,4 @@ export class BotManager {
         else
             process.exit(0);
     }
-    sendLog(msg, isError = false) { }
-    sendStatus(status) { }
 }

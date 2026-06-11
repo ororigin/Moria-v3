@@ -9,4 +9,3 @@ class LoggerFactory {
     }
 }
 export {};
-//# sourceMappingURL=logger.js.map

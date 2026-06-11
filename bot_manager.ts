@@ -4,6 +4,9 @@ import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import type { C2MProcessTransportData, M2CProcessTransportData, InternalData } from './type/transport.js';
 import { isM2CProcessTransportData, isC2MProcessTransportData, isInternalData } from './type/transport.js';
+import type { ConfigManagerFactory } from './storage/config/factory/ConfigManagerFactory.js';
+import { ConfigType } from './storage/config/factory/ConfigType.js';
+import type { BotConfig } from './storage/config/types/BotConfig.js';
 import { promisify } from 'util';
 import os from 'os';
 
@@ -19,7 +22,7 @@ interface BotProcessPidList {
     [bot_id: string]: number;
 }
 
-class BotManager {
+export class BotManager {
     messageBus = new EventEmitter(); //子进程消息事件总线
     botProcessList: BotProcessList = {};
     botProcessPidList: BotProcessPidList = {};
@@ -40,20 +43,57 @@ class BotManager {
                 this.internalData[msg.botId][messageType] = msg;
             }
         });
+        // 配置变更事件：子进程上报配置更改 → 写入本地配置文件
+        this.messageBus.on("config:update", async (msg: C2MProcessTransportData & { config?: Partial<BotConfig> }) => {
+            if (!msg.config || Object.keys(msg.config).length === 0) return;
+            try {
+                const mgr = this.configFactory.create(ConfigType.BOT, msg.botId);
+                await mgr.write(msg.config);
+            } catch (err) {
+                console.error(`[BotManager] 同步配置失败 bot=${msg.botId}:`, err);
+            }
+        });
     }
 
     private botScriptPath: string;
+    private configFactory!: ConfigManagerFactory;
 
-    constructor(botScriptPath?: string) {
-        // 动态解析 bot.js 路径，避免硬编码；支持外部传入覆盖
+    constructor(configFactoryOrScriptPath?: ConfigManagerFactory | string) {
         const __dirname = dirname(fileURLToPath(import.meta.url));
-        this.botScriptPath = botScriptPath ?? resolve(__dirname, 'bots', 'dist', 'bot.js');
+        if (configFactoryOrScriptPath && typeof configFactoryOrScriptPath === 'object') {
+            // 传入 ConfigManagerFactory
+            this.configFactory = configFactoryOrScriptPath;
+            this.botScriptPath = resolve(__dirname, 'bots', 'dist', 'bot.js');
+        } else {
+            // 兼容旧式调用：传入 botScriptPath（string）或不传
+            this.botScriptPath = (configFactoryOrScriptPath as string | undefined) ?? resolve(__dirname, 'bots', 'dist', 'bot.js');
+            // 如果没有 configFactory，startBot 无法工作，留到 startBot 时抛错
+        }
     }
 
-    startBot(bot_id: string, name: string, server: string, port: number, password: string) {
-        const botChildProcess = fork(this.botScriptPath, [bot_id, name, server, `${port}`, password]);
+    // 延迟注入 configFactory（用于旧式构造后配置）
+    setConfigFactory(factory: ConfigManagerFactory): void {
+        this.configFactory = factory;
+    }
+
+    /**
+     * 通过 botId 从配置文件读取完整配置，然后启动子进程
+     * @param botId  Bot UUID
+     */
+    async startBot(botId: string): Promise<void> {
+        if (!this.configFactory) {
+            throw new Error('[BotManager] ConfigManagerFactory 未设置，无法启动 Bot');
+        }
+
+        // 从配置文件读取 Bot 配置
+        const mgr = this.configFactory.create<BotConfig>(ConfigType.BOT, botId);
+        const config = await mgr.read();
+
+        // fork 子进程（仅传 botId 作为标识，详细配置通过 IPC 发送）
+        const botChildProcess = fork(this.botScriptPath, [botId]);
+
         if (botChildProcess.pid) {
-            this.botProcessPidList[bot_id] = botChildProcess.pid;
+            this.botProcessPidList[botId] = botChildProcess.pid;
         }
 
         botChildProcess.on("message", (msg: unknown) => {
@@ -63,7 +103,16 @@ class BotManager {
             this.messageBus.emit(msg.type, msg);
         });
 
-        this.botProcessList[bot_id] = botChildProcess;
+        this.botProcessList[botId] = botChildProcess;
+
+        // 等待子进程就绪后，通过 IPC 发送完整配置
+        // 使用 setImmediate 确保 fork 已完成内部初始化
+        await new Promise<void>(resolve => setImmediate(resolve));
+        const initMsg: M2CProcessTransportData = {
+            type: 'init',
+            config,
+        };
+        botChildProcess.send(initMsg);
     }
 
     /**
@@ -247,6 +296,52 @@ class BotManager {
             if (!hasRemaining) {
                 delete this.internalData[botId];
             }
+        }
+    }
+
+    // ─── 配置同步 ─────────────────────────────────────────────────────────────
+
+    /**
+     * 向指定 Bot 子进程推送配置更新，同时写入本地配置文件
+     * @param botId  Bot UUID
+     * @param patch  要更新的配置字段（Partial）
+     */
+    async pushConfig(botId: string, patch: Partial<BotConfig>): Promise<void> {
+        const child = this.botProcessList[botId];
+        if (!child || child.killed || child.exitCode !== null) {
+            console.warn(`[BotManager] Bot ${botId} 未运行，仅更新配置文件`);
+        }
+
+        // 1. 更新本地配置文件
+        try {
+            const mgr = this.configFactory.create<BotConfig>(ConfigType.BOT, botId);
+            await mgr.write(patch);
+        } catch (err) {
+            console.error(`[BotManager] 写入配置失败 bot=${botId}:`, err);
+            return;
+        }
+
+        // 2. 向子进程推送配置
+        if (child && !child.killed && child.exitCode === null) {
+            const pushMsg: M2CProcessTransportData = {
+                type: 'config:push',
+                config: patch,
+            };
+            child.send(pushMsg);
+        }
+    }
+
+    /**
+     * 获取指定 Bot 的完整配置（从文件读取）
+     * @param botId  Bot UUID
+     */
+    async getBotConfig(botId: string): Promise<BotConfig | null> {
+        if (!this.configFactory) return null;
+        try {
+            const mgr = this.configFactory.create<BotConfig>(ConfigType.BOT, botId);
+            return await mgr.read();
+        } catch {
+            return null;
         }
     }
 }
