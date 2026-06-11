@@ -4,24 +4,39 @@ import { CommandResolver } from './modules/CommandResolver.js';
 import { Command } from './modules/Commands.js';
 import { createTransport } from './transports/createTransport.js';
 import { isM2CProcessTransportData } from './type/transport.js';
-// 支持两种初始化方式：
-// 1) 旧的 argv 方式: node bot.js <botId> <name> <host> <port> [password]
-// 2) 父进程通过 IPC 发送初始化消息: { type: 'init', config: { ... } }
+// ─── 配置初始化 ───────────────────────────────────────────────────────────────
+// 支持以下方式获取配置（按优先级）：
+//   1) argv 提供完整连接参数: node bot.js <botId> <name> <host> <port> [password]
+//   2) 父进程 IPC 发送 { type: 'init', config: { ... } }
+//   3) argv 提供部分参数 + 默认值降级运行
+//
+// configured = true  ↔ 来自 IPC 的完整配置（含所有 BotRuntimeConfig 字段）
+// configured = false ↔ 仅 argv / 默认值，无完整配置文件
 async function main() {
-    // 尝试从 argv 解析
-    const botId = process.argv[2];
-    const name = process.argv[3];
-    const host = process.argv[4];
-    const port = process.argv[5] ? parseInt(process.argv[5]) : NaN;
-    const password = process.argv[6];
+    // ── 步骤 1: 尝试从 argv 解析 ──────────────────────────────────────────────
+    const argvBotId = process.argv[2];
+    const argvName = process.argv[3];
+    const argvHost = process.argv[4];
+    const argvPort = process.argv[5] ? parseInt(process.argv[5]) : NaN;
+    const argvPass = process.argv[6];
     let config = null;
-    if (botId && name && host && !isNaN(port)) {
-        config = { botId, name, host, port, password: password || 'ufdbfcir' };
+    /** 是否拥有完整配置（来自 IPC init） */
+    let configured = false;
+    // ── 步骤 2: argv 提供完整连接参数 ✓ ──────────────────────────────────────
+    if (argvBotId && argvName && argvHost && !isNaN(argvPort)) {
+        config = {
+            botId: argvBotId,
+            name: argvName,
+            host: argvHost,
+            server: argvHost,
+            port: argvPort,
+            password: argvPass || 'ufdbfcir',
+        };
     }
+    // ── 步骤 3: argv 参数不足 → 等待 IPC init（10s 超时） ────────────────────
     else {
-        // 等待父进程通过 IPC 发来初始化配置（10s 超时）
-        config = await new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => reject(new Error('no-init-config')), 10000);
+        config = await new Promise((resolve) => {
+            const timeout = setTimeout(() => resolve(null), 10000);
             const handler = (msg) => {
                 if (msg && typeof msg === 'object' && msg.type === 'init' && msg.config) {
                     clearTimeout(timeout);
@@ -30,13 +45,32 @@ async function main() {
                 }
             };
             process.on('message', handler);
-        }).catch(() => null);
+        });
+        // IPC 收到了完整配置
+        if (config) {
+            configured = true;
+        }
+        // ── 步骤 4: IPC 超时 → 用 argv 已有部分 + 默认值降级 ─────────────────
+        else {
+            config = {
+                ...(argvBotId ? { botId: argvBotId } : {}),
+                ...(argvName ? { name: argvName, displayName: argvName } : {}),
+                ...(argvHost ? { host: argvHost, server: argvHost } : {}),
+                ...(!isNaN(argvPort) ? { port: argvPort } : {}),
+                ...(argvPass ? { password: argvPass } : {}),
+            };
+            if (config.botId || config.name) {
+                console.warn(`[bot] 警告: 未收到父进程配置，使用有限参数+默认值启动 (configured=false)`);
+            }
+            else {
+                // 连最基本的 botId/name 都没有，此时确实无法启动
+                console.error('[bot] 错误: 未提供 botId 或 name，无法启动');
+                console.error('Usage: node bot.js <botId> <name> <host> <port> [password]');
+                process.exit(1);
+            }
+        }
     }
-    if (!config) {
-        console.error('Usage: node bot.js <botId> <name> <host> <port> [password] OR parent must send init config via IPC');
-        process.exit(1);
-    }
-    // 规范化并填充默认值
+    // ── 步骤 5: 规范化并填充全部默认值 ──────────────────────────────────────
     const cfg = {
         botId: config.botId ?? '',
         name: config.name ?? '',
@@ -155,6 +189,10 @@ async function main() {
             case 'internal:pid':
                 sendOutput('internal', { internalType: 'pid', message: { pid: process.pid } });
                 return;
+            // 查询配置状态
+            case 'internal:configured':
+                sendOutput('internal', { internalType: 'configured', message: { configured } });
+                return;
             // 父进程推送配置更新
             case 'config:push':
                 if (msg.config && typeof msg.config === 'object') {
@@ -197,9 +235,11 @@ async function main() {
     setInterval(() => {
         sendOutput('heartbeat');
     }, 8000);
+    // 上报配置状态
+    sendOutput('status', { status: 'starting', configured });
     // 启动 
     botManager.start();
-    sendOutput('log', { message: `假人进程启动 - ${cfg.name} @ ${cfg.host}:${cfg.port}` });
+    sendOutput('log', { message: `假人进程启动 - ${cfg.name} @ ${cfg.host}:${cfg.port} (configured=${configured})` });
     resetHeartbeatTimeout();
 }
 // 启动主流程
