@@ -1,8 +1,8 @@
 import type { IContext } from './utils/IContext.js';
 import { BotManager } from './core/BotManager.js';
 import { CommandDispatcher } from './core/CommandDispatcher.js';
-import { CommandResolver } from './moudles/CommandResolver.js';
-import { Command } from './moudles/Commands.js';
+import { CommandResolver } from './modules/CommandResolver.js';
+import { Command } from './modules/Commands.js';
 import { createTransport } from './transports/createTransport.js';
 import { isM2CProcessTransportData, type C2MProcessTransportData } from './type/transport.js';
 
@@ -88,8 +88,16 @@ async function main() {
     if (cmd) dispatcher.dispatch(cmd);
   };
 
+  // 日志与状态推送（供 BotManager 内部调用）
+  const botManagerSendLog = (msg: string, isError = false) => {
+    sendOutput('log', { message: msg, error: isError });
+  };
+  const botManagerSendStatus = (status: string) => {
+    sendOutput('status', { status });
+  };
+
   // 创建 BotManager
-  const botManager = new BotManager(cfg, dispatcher, onWhisper);
+  const botManager = new BotManager(cfg, dispatcher, onWhisper, botManagerSendLog, botManagerSendStatus);
 
   // 父进程存活检测
   const HEARTBEAT_TIMEOUT_MS = 16000;

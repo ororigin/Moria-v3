@@ -1,4 +1,4 @@
-import { CommandHandler, Command } from '../moudles/Commands.js';
+import { CommandHandler, Command } from '../modules/Commands.js';
 import type { IContext } from '../utils/IContext.js';
 
 export class CommandDispatcher {

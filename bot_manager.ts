@@ -1,5 +1,7 @@
 import { spawn, exec, execFile, fork, ChildProcess } from 'child_process';
 import EventEmitter from 'events';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
 import type { C2MProcessTransportData, M2CProcessTransportData, InternalData } from './type/transport.js';
 import { isM2CProcessTransportData, isC2MProcessTransportData, isInternalData } from './type/transport.js';
 import { promisify } from 'util';
@@ -40,8 +42,16 @@ class BotManager {
         });
     }
 
+    private botScriptPath: string;
+
+    constructor(botScriptPath?: string) {
+        // 动态解析 bot.js 路径，避免硬编码；支持外部传入覆盖
+        const __dirname = dirname(fileURLToPath(import.meta.url));
+        this.botScriptPath = botScriptPath ?? resolve(__dirname, 'bots', 'dist', 'bot.js');
+    }
+
     startBot(bot_id: string, name: string, server: string, port: number, password: string) {
-        const botChildProcess = fork("../bots/dist/bot.js", [bot_id, name, server, `${port}`, password]);
+        const botChildProcess = fork(this.botScriptPath, [bot_id, name, server, `${port}`, password]);
         if (botChildProcess.pid) {
             this.botProcessPidList[bot_id] = botChildProcess.pid;
         }
