@@ -1,0 +1,1 @@
+{"version":3,"file":"SystemConfigTemplate.d.ts","sourceRoot":"","sources":["SystemConfigTemplate.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,eAAe,EAAE,MAAM,kCAAkC,CAAC;AACxE,OAAO,KAAK,EAAE,YAAY,EAAE,MAAM,0BAA0B,CAAC;AAE7D;;;GAGG;AACH,qBAAa,oBAAqB,YAAW,eAAe,CAAC,YAAY,CAAC;IACxE,SAAS,IAAI,MAAM;IAInB,UAAU,CAAC,IAAI,EAAE,MAAM,GAAG,YAAY;CAYvC"}

@@ -21,7 +21,7 @@ Moria-v3/
     ├── core/                  # 核心功能模块
     │   ├── BotManager.ts      # 机器人生命周期管理
     │   └── CommandDispatcher.ts # 命令调度器
-    ├── moudles/               # 功能模块（注：原意应为 modules）
+    ├── modules/               # 功能模块
     │   ├── Commands.ts        # 命令基类和处理器
     │   ├── CommandResolver.ts # 命令解析器
     │   └── commands/          # 内置命令集合
@@ -64,7 +64,7 @@ Moria-v3/
 - 将命令添加到处理队列
 - 清空队列和中止当前命令
 
-### 3. CommandResolver (`bots/moudles/CommandResolver.ts`)
+### 3. CommandResolver (`bots/modules/CommandResolver.ts`)
 
 **职责**: 解析不同来源的命令输入
 
@@ -72,7 +72,7 @@ Moria-v3/
 - **游戏内私聊**: 以 `#` 开头的消息
 - **标准输入 (stdin)**: JSON 格式的命令对象
 
-### 4. CommandHandler (`bots/moudles/Commands.ts`)
+### 4. CommandHandler (`bots/modules/Commands.ts`)
 
 **职责**: 命令队列管理和执行
 
@@ -344,7 +344,7 @@ CommandHandler 顺序执行
 
 ### 添加新命令
 
-1. 在 `bots/moudles/commands/` 中创建新文件
+1. 在 `bots/modules/commands/` 中创建新文件
 2. 继承 `Command` 类（或 `PersistentCommand`）
 3. 实现 `exec(context, signal)` 方法
 4. 在 `CommandResolver.resolveInGame()` 或 `resolveStdin()` 中注册

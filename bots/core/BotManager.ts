@@ -12,7 +12,9 @@ export class BotManager {
   constructor(
     private config: IContext['config'],
     private dispatcher: CommandDispatcher,   // 用于清空队列和中断持久命令
-    private onWhisper: (username: string, message: string) => void
+    private onWhisper: (username: string, message: string) => void,
+    private sendLog: (msg: string, isError?: boolean) => void = () => {},
+    private sendStatus: (status: string) => void = () => {}
   ) {
     this.context = { bot: null, config , getBot() {
         if(!this.bot) throw new Error('Context not fully initialized');
@@ -130,6 +132,5 @@ export class BotManager {
     else process.exit(0);
   }
 
-  private sendLog(msg: string, isError = false) { /* 输出到 stdout */ }
-  private sendStatus(status: string) { /* 输出状态 */ }
+  // sendLog 和 sendStatus 通过构造函数注入，由 bot.ts 提供 transport 输出实现
 }

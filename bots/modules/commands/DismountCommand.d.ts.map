@@ -1,0 +1,1 @@
+{"version":3,"file":"DismountCommand.d.ts","sourceRoot":"","sources":["DismountCommand.ts"],"names":[],"mappings":"AACA,OAAO,EAAE,OAAO,EAAE,MAAM,gBAAgB,CAAC;AACzC,OAAO,KAAK,EAAE,QAAQ,EAAE,MAAM,yBAAyB,CAAC;AAExD,qBAAa,eAAgB,SAAQ,OAAO;IACpC,IAAI,CAAC,OAAO,EAAE,QAAQ,GAAG,OAAO,CAAC,IAAI,CAAC;CAI7C"}

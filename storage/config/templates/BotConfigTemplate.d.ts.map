@@ -1,0 +1,1 @@
+{"version":3,"file":"BotConfigTemplate.d.ts","sourceRoot":"","sources":["BotConfigTemplate.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,eAAe,EAAE,MAAM,kCAAkC,CAAC;AACxE,OAAO,KAAK,EAAE,SAAS,EAAE,MAAM,uBAAuB,CAAC;AAEvD;;;;GAIG;AACH,qBAAa,iBAAkB,YAAW,eAAe,CAAC,SAAS,CAAC;IAClE,SAAS,IAAI,MAAM;IAInB,UAAU,CAAC,IAAI,EAAE,MAAM,GAAG,SAAS;CAepC"}
