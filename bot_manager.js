@@ -4,19 +4,40 @@ import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import { isM2CProcessTransportData, isC2MProcessTransportData, isInternalData } from './type/transport.js';
 import { ConfigType } from './storage/config/factory/ConfigType.js';
+import { BotStatus } from './storage/config/types/BotStatus.js';
 import { promisify } from 'util';
 import os from 'os';
 const execPromise = promisify(exec);
 export class BotManager {
     messageBus = new EventEmitter(); //子进程消息事件总线
-    botProcessList = {};
-    botProcessPidList = {};
+    botProcesses = {};
     internalData = {}; //根据botId和messageType索引的容器
     registerMessageBus() {
-        //心跳事件
+        //心跳事件：记录最后心跳时间并回复
         this.messageBus.on("heartbeat", (msg) => {
+            const entry = this.botProcesses[msg.botId];
+            if (entry) {
+                entry.lastHeartbeat = Date.now();
+            }
             const m = { type: "heartbeat" };
-            this.botProcessList[msg.botId]?.send(m);
+            this.botProcesses[msg.botId]?.process.send(m);
+        });
+        //子进程状态变更事件
+        this.messageBus.on("status", (msg) => {
+            const entry = this.botProcesses[msg.botId];
+            if (!entry || !msg.status)
+                return;
+            switch (msg.status) {
+                case 'starting':
+                    entry.status = BotStatus.STARTING;
+                    break;
+                case 'online':
+                    entry.status = BotStatus.ONLINE;
+                    break;
+                case 'offline':
+                    entry.status = BotStatus.OFFLINE;
+                    break;
+            }
         });
         //内部事件
         this.messageBus.on("internal", (msg) => {
@@ -72,16 +93,20 @@ export class BotManager {
         const config = await mgr.read();
         // fork 子进程（仅传 botId 作为标识，详细配置通过 IPC 发送）
         const botChildProcess = fork(this.botScriptPath, [botId]);
-        if (botChildProcess.pid) {
-            this.botProcessPidList[botId] = botChildProcess.pid;
-        }
         botChildProcess.on("message", (msg) => {
             if (!isC2MProcessTransportData(msg)) {
                 return;
             }
             this.messageBus.emit(msg.type, msg);
         });
-        this.botProcessList[botId] = botChildProcess;
+        const now = Date.now();
+        this.botProcesses[botId] = {
+            process: botChildProcess,
+            pid: botChildProcess.pid ?? 0,
+            status: BotStatus.STARTING,
+            lastHeartbeat: now,
+            startTime: now,
+        };
         // 等待子进程就绪后，通过 IPC 发送完整配置
         // 使用 setImmediate 确保 fork 已完成内部初始化
         await new Promise(resolve => setImmediate(resolve));
@@ -98,7 +123,8 @@ export class BotManager {
      * @returns 如果成功获取返回 pid；若 bot 不存在、子进程已退出或超时则返回 -1
      */
     async getBotProcessPid(bot_id, timeoutMs = 5000) {
-        const child = this.botProcessList[bot_id];
+        const entry = this.botProcesses[bot_id];
+        const child = entry?.process;
         if (!child || child.killed || child.exitCode !== null) {
             return -1;
         }
@@ -112,7 +138,10 @@ export class BotManager {
                 const check = () => {
                     const msg = this.internalData[bot_id]?.pid;
                     if (msg && msg.message && typeof msg.message.pid === 'number') {
-                        // 拿到有效 pid，清理缓存后返回
+                        // 拿到有效 pid，用 IPC 确认的 pid 覆盖条目中的记录
+                        if (entry) {
+                            entry.pid = msg.message.pid;
+                        }
                         if (this.internalData[bot_id]?.pid) {
                             delete this.internalData[bot_id].pid; // 已知 bot_id 条目存在，用 ! 断言
                         }
@@ -150,25 +179,29 @@ export class BotManager {
      */
     async cleanupUnresponsiveBots(requestTimeoutMs = 5000, gracePeriodMs = 5000) {
         const unresponsiveBots = [];
-        for (const botId of Object.keys(this.botProcessList)) {
+        for (const botId of Object.keys(this.botProcesses)) {
             if (this.internalData[botId]?.pid) {
                 delete this.internalData[botId].pid;
             }
         }
-        for (const [botId, child] of Object.entries(this.botProcessList)) {
+        for (const [botId, entry] of Object.entries(this.botProcesses)) {
+            const child = entry.process;
             if (child.killed || child.exitCode !== null) {
                 continue; // 已经退出的不处理
             }
             child.send({ type: 'internal:pid' });
         }
         const start = Date.now();
-        const requiredBots = Object.keys(this.botProcessList).filter(id => !this.botProcessList[id]?.killed && this.botProcessList[id]?.exitCode === null);
+        const requiredBots = Object.keys(this.botProcesses).filter(id => {
+            const e = this.botProcesses[id];
+            return e && !e.process.killed && e.process.exitCode === null;
+        });
         await new Promise(resolve => {
             const check = () => {
                 // 所有存活子进程均已响应，或超时
                 const allResponded = requiredBots.every(botId => {
-                    const child = this.botProcessList[botId];
-                    if (!child || child.killed || child.exitCode !== null)
+                    const e = this.botProcesses[botId];
+                    if (!e || e.process.killed || e.process.exitCode !== null)
                         return true; // 已退出视为不再需要
                     return !!this.internalData[botId]?.pid;
                 });
@@ -181,8 +214,8 @@ export class BotManager {
             check();
         });
         for (const botId of requiredBots) {
-            const child = this.botProcessList[botId];
-            if (!child || child.killed || child.exitCode !== null)
+            const e = this.botProcesses[botId];
+            if (!e || e.process.killed || e.process.exitCode !== null)
                 continue;
             const pidMsg = this.internalData[botId]?.pid;
             if (!pidMsg || typeof pidMsg?.message?.pid !== 'number') {
@@ -190,10 +223,11 @@ export class BotManager {
             }
         }
         for (const botId of unresponsiveBots) {
-            const child = this.botProcessList[botId];
-            if (!child || child.killed || child.exitCode !== null)
+            const entry = this.botProcesses[botId];
+            if (!entry || entry.process.killed || entry.process.exitCode !== null)
                 continue;
-            const pid = child.pid; // 记录 pid 用于强杀
+            const child = entry.process;
+            const pid = entry.pid; // 优先使用独立存储的 pid（可能已被 IPC 确认更新）
             // 优雅终止
             try {
                 child.kill('SIGTERM');
@@ -237,8 +271,7 @@ export class BotManager {
                 }
             }
             // 清理管理结构
-            delete this.botProcessList[botId];
-            delete this.botProcessPidList[botId];
+            delete this.botProcesses[botId];
             delete this.internalData[botId];
         }
     }
@@ -276,7 +309,8 @@ export class BotManager {
      * @param patch  要更新的配置字段（Partial）
      */
     async pushConfig(botId, patch) {
-        const child = this.botProcessList[botId];
+        const entry = this.botProcesses[botId];
+        const child = entry?.process;
         if (!child || child.killed || child.exitCode !== null) {
             console.warn(`[BotManager] Bot ${botId} 未运行，仅更新配置文件`);
         }
@@ -311,6 +345,73 @@ export class BotManager {
         }
         catch {
             return null;
+        }
+    }
+    // ─── 运行时状态查询 ──────────────────────────────────────────────────────
+    /**
+     * 获取当前在线 Bot 数量（状态为 ONLINE）
+     */
+    getOnlineCount() {
+        return Object.values(this.botProcesses).filter(e => e.status === BotStatus.ONLINE).length;
+    }
+    /**
+     * 获取所有已注册 Bot 总数（从配置文件统计）
+     */
+    async getTotalCount() {
+        if (!this.configFactory)
+            return 0;
+        try {
+            const names = await this.configFactory.listAll(ConfigType.BOT);
+            return names.length;
+        }
+        catch {
+            return 0;
+        }
+    }
+    /**
+     * 获取单个 Bot 的综合信息（配置 + 运行时状态）
+     */
+    async getBotInfo(botId) {
+        if (!this.configFactory)
+            return null;
+        try {
+            const mgr = this.configFactory.create(ConfigType.BOT, botId);
+            const config = await mgr.read();
+            const entry = this.botProcesses[botId];
+            const isActive = !!entry && !entry.process.killed && entry.process.exitCode === null;
+            return {
+                id: config.botId,
+                name: config.name,
+                server: config.server,
+                port: config.port,
+                status: entry?.status ?? BotStatus.OFFLINE,
+                is_active: isActive,
+                last_activity: config.updatedAt,
+                created_at: config.createdAt,
+            };
+        }
+        catch {
+            return null;
+        }
+    }
+    /**
+     * 获取所有 Bot 的综合信息列表
+     */
+    async getAllBotsInfo() {
+        if (!this.configFactory)
+            return [];
+        try {
+            const names = await this.configFactory.listAll(ConfigType.BOT);
+            const results = [];
+            for (const botId of names) {
+                const info = await this.getBotInfo(botId);
+                if (info)
+                    results.push(info);
+            }
+            return results;
+        }
+        catch {
+            return [];
         }
     }
 }
