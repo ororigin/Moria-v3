@@ -110,10 +110,75 @@ export class BotManager {
     /**
      * 通过 botId 从配置文件读取完整配置，然后启动子进程
      * @param botId  Bot UUID
+     * @param force  是否强制重新启动。如果为 true 且 bot 进程存活，先终止再重新启动
+     * @throws 当 bot 非离线状态且 force=false 时抛出错误
      */
-    async startBot(botId: string): Promise<void> {
+    async startBot(botId: string, force: boolean = false): Promise<void> {
         if (!this.configFactory) {
             throw new Error('[BotManager] ConfigManagerFactory 未设置，无法启动 Bot');
+        }
+
+        const existingEntry = this.botProcesses[botId];
+        const isRunning = existingEntry &&
+            !existingEntry.process.killed &&
+            existingEntry.process.exitCode === null;
+
+        if (isRunning) {
+            if (!force) {
+                throw new Error(
+                    `[BotManager] Bot ${botId} 当前状态为 ${existingEntry.status}，` +
+                    '无法启动（仅允许在离线状态下启动）。如需强制重启请设置 force=true'
+                );
+            }
+
+            // force=true：强制终止现有进程
+            const child = existingEntry.process;
+            const pid = existingEntry.pid;
+
+            // 先尝试优雅关闭
+            try {
+                child.kill('SIGTERM');
+            } catch {
+                // Windows 上忽略信号错误
+            }
+
+            // 等待进程退出（最多 5 秒）
+            await new Promise<void>((resolve) => {
+                const deadline = Date.now() + 5000;
+                const waitExit = () => {
+                    if (child.killed || child.exitCode !== null) {
+                        resolve();
+                        return;
+                    }
+                    if (Date.now() >= deadline) {
+                        resolve();
+                        return;
+                    }
+                    setImmediate(waitExit);
+                };
+                waitExit();
+            });
+
+            // 若仍未退出则强杀
+            if (!child.killed && child.exitCode === null) {
+                if (os.platform() === 'win32') {
+                    try {
+                        await execPromise(`taskkill /F /T /PID ${pid}`);
+                    } catch {
+                        // 忽略 taskkill 错误
+                    }
+                } else {
+                    try {
+                        child.kill('SIGKILL');
+                    } catch {
+                        // 忽略错误
+                    }
+                }
+            }
+
+            // 清理旧条目
+            delete this.botProcesses[botId];
+            delete this.internalData[botId];
         }
 
         // 从配置文件读取 Bot 配置
