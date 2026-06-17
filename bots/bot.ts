@@ -251,9 +251,9 @@ async function main() {
     botManager.shutdown();
   });
 
-  // 心跳定时发送
+  // 心跳定时发送（附带进程 PID，供父进程确认）
   setInterval(() => {
-    sendOutput('heartbeat');
+    sendOutput('heartbeat', { pid: process.pid });
   }, 8000);
 
   // 上报配置状态

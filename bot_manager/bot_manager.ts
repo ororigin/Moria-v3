@@ -14,10 +14,11 @@ import { waitForExit, isProcessAlive, forceKillProcess } from './utils.js';
 //子进程管理条目（运行时状态，不持久化）
 interface BotProcessEntry {
     process: ChildProcess;
-    pid: number;                 // 创建时从 child.pid 写入，可被 IPC 确认更新
+    pid: number;                 // 创建时从 child.pid 写入，可被心跳/IPC 确认更新
     status: BotStatus;           // 当前运行时状态
     lastHeartbeat: number;       // 最后收到心跳的时间戳
     startTime: number;           // 条目创建（启动）时间戳
+    missedHeartbeats: number;    // 连续失跳次数，由心跳监控定时器维护
 }
 
 /** createBot 输入参数 */
@@ -74,13 +75,19 @@ export class BotManager {
     messageBus = new EventEmitter(); //子进程消息事件总线
     botProcesses: { [botId: string]: BotProcessEntry } = {};
     internalData: { [botId: string]: { [messageType: string]: C2MProcessTransportData } } = {}; //根据botId和messageType索引的容器
+    private heartbeatMonitorTimer: ReturnType<typeof setInterval> | null = null;
 
     registerMessageBus() {
-        //心跳事件：记录最后心跳时间并回复
-        this.messageBus.on("heartbeat", (msg: C2MProcessTransportData) => {
+        //心跳事件：记录最后心跳时间、同步 PID、重置失跳计数、回复确认
+        this.messageBus.on("heartbeat", (msg: C2MProcessTransportData & { pid?: number }) => {
             const entry = this.botProcesses[msg.botId];
             if (entry) {
                 entry.lastHeartbeat = Date.now();
+                entry.missedHeartbeats = 0;
+                // 子进程心跳附带 pid 时，覆盖条目中的记录
+                if (typeof msg.pid === 'number' && msg.pid > 0) {
+                    entry.pid = msg.pid;
+                }
             }
             const m: M2CProcessTransportData = { type: "heartbeat" };
             this.botProcesses[msg.botId]?.process.send(m);
@@ -193,6 +200,7 @@ export class BotManager {
             status: BotStatus.STARTING,
             lastHeartbeat: now,
             startTime: now,
+            missedHeartbeats: 0,
         };
 
         // 等待子进程就绪后，通过 IPC 发送完整配置
@@ -262,65 +270,36 @@ export class BotManager {
     }
 
     /**
-     * 清理超时未响应的子进程
-     * - 向所有子进程请求 pid
-     * - 在 requestTimeoutMs 内未收到响应的进程视为无响应
-     * - 先发送 SIGTERM，等待 gracePeriodMs 后若仍存活则强杀
+     * 清理超时未响应的子进程（基于 lastHeartbeat 时间戳判断）
+     * - 检查所有存活子进程的 lastHeartbeat 是否在指定超时内
+     * - 超时的进程先 SIGTERM，等待 gracePeriodMs 后若仍存活则强杀
      * - 兼容 Windows / Linux
+     *
+     * @param heartbeatTimeoutMs  心跳超时阈值（毫秒），默认 20s
+     * @param gracePeriodMs       强杀阶段等待时间（毫秒），默认 5000
      */
     async cleanupUnresponsiveBots(
-        requestTimeoutMs: number = 5000,
+        heartbeatTimeoutMs: number = 20000,
         gracePeriodMs: number = 5000
     ): Promise<void> {
-        const unresponsiveBots: string[] = [];
-        for (const botId of Object.keys(this.botProcesses)) {
-            if (this.internalData[botId]?.pid) {
-                delete this.internalData[botId].pid;
-            }
-        }
+        const now = Date.now();
         for (const [botId, entry] of Object.entries(this.botProcesses)) {
-            const child = entry.process;
-            if (!isProcessAlive(child)) {
-                continue; // 已经退出的不处理
+            if (!isProcessAlive(entry.process)) {
+                // 进程已退出，清理残留条目
+                delete this.botProcesses[botId];
+                delete this.internalData[botId];
+                continue;
             }
-            child.send({ type: 'internal:pid' });
-        }
-        const start = Date.now();
-        const requiredBots = Object.keys(this.botProcesses).filter(
-            id => isProcessAlive(this.botProcesses[id]?.process)
-        );
-        await new Promise<void>(resolve => {
-            const check = () => {
-                // 所有存活子进程均已响应，或超时
-                const allResponded = requiredBots.every(botId => {
-                    const e = this.botProcesses[botId];
-                    if (!e || e.process.killed || e.process.exitCode !== null) return true; // 已退出视为不再需要
-                    return !!this.internalData[botId]?.pid;
-                });
 
-                if (allResponded || Date.now() - start >= requestTimeoutMs) {
-                    resolve();
-                    return;
-                }
-                setImmediate(check);
-            };
-            check();
-        });
-        for (const botId of requiredBots) {
-            const e = this.botProcesses[botId];
-            if (!e || !isProcessAlive(e.process)) continue;
-            const pidMsg = this.internalData[botId]?.pid;
-            if (!pidMsg || typeof pidMsg?.message?.pid !== 'number') {
-                unresponsiveBots.push(botId);
-            }
-        }
-        for (const botId of unresponsiveBots) {
-            const entry = this.botProcesses[botId];
-            if (!entry || !isProcessAlive(entry.process)) continue;
+            const elapsed = now - entry.lastHeartbeat;
+            if (elapsed <= heartbeatTimeoutMs) continue;
+
+            console.warn(
+                `[BotManager] Bot ${botId} 心跳超时 (${elapsed}ms)，执行清理`
+            );
 
             await forceKillProcess(entry.process, entry.pid, gracePeriodMs);
 
-            // 清理管理结构
             delete this.botProcesses[botId];
             delete this.internalData[botId];
         }
@@ -349,6 +328,78 @@ export class BotManager {
             if (!hasRemaining) {
                 delete this.internalData[botId];
             }
+        }
+    }
+
+    /**
+     * 启动心跳监控定时器
+     * - 定时检查所有子进程的 lastHeartbeat，维护 missedHeartbeats 计数
+     * - 连续失跳达到阈值后自动清理
+     *
+     * @param intervalMs    检查间隔（毫秒），默认 5000
+     * @param timeoutMs     单次心跳超时阈值（毫秒），默认 15000
+     * @param maxMissed     最大连续失跳次数，超过后执行清理，默认 3
+     */
+    startHeartbeatMonitor(
+        intervalMs: number = 5000,
+        timeoutMs: number = 15000,
+        maxMissed: number = 3
+    ): void {
+        if (this.heartbeatMonitorTimer) {
+            console.warn('[BotManager] 心跳监控已启动，跳过重复启动');
+            return;
+        }
+
+        this.heartbeatMonitorTimer = setInterval(() => {
+            const now = Date.now();
+
+            for (const [botId, entry] of Object.entries(this.botProcesses)) {
+                // 进程已退出，直接清理
+                if (!isProcessAlive(entry.process)) {
+                    delete this.botProcesses[botId];
+                    delete this.internalData[botId];
+                    continue;
+                }
+
+                const elapsed = now - entry.lastHeartbeat;
+
+                if (elapsed > timeoutMs) {
+                    entry.missedHeartbeats++;
+
+                    if (entry.missedHeartbeats >= maxMissed) {
+                        console.warn(
+                            `[BotManager] Bot ${botId} 连续 ${entry.missedHeartbeats} 次心跳失联，` +
+                            `上次心跳距今 ${elapsed}ms，执行清理`
+                        );
+                        entry.status = BotStatus.ERROR;
+
+                        // 异步清理（不阻塞定时器循环）
+                        this.cleanupUnresponsiveBots(timeoutMs).catch((err) => {
+                            console.error(
+                                `[BotManager] 清理 Bot ${botId} 失败:`, err
+                            );
+                        });
+                    }
+                } else {
+                    // 心跳正常，重置失跳计数
+                    entry.missedHeartbeats = 0;
+                }
+            }
+        }, intervalMs);
+
+        // 允许定时器不阻止进程退出
+        if (this.heartbeatMonitorTimer && typeof this.heartbeatMonitorTimer === 'object' && 'unref' in this.heartbeatMonitorTimer) {
+            this.heartbeatMonitorTimer.unref();
+        }
+    }
+
+    /**
+     * 停止心跳监控定时器
+     */
+    stopHeartbeatMonitor(): void {
+        if (this.heartbeatMonitorTimer) {
+            clearInterval(this.heartbeatMonitorTimer);
+            this.heartbeatMonitorTimer = null;
         }
     }
 
