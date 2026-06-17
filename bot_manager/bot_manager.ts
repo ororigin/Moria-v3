@@ -1,17 +1,15 @@
-import { spawn, exec, execFile, fork, ChildProcess } from 'child_process';
+import { fork, type ChildProcess } from 'child_process';
+import crypto from 'node:crypto';
 import EventEmitter from 'events';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
-import type { C2MProcessTransportData, M2CProcessTransportData, InternalData } from './type/transport.js';
-import { isM2CProcessTransportData, isC2MProcessTransportData, isInternalData } from './type/transport.js';
-import type { ConfigManagerFactory } from './storage/config/factory/ConfigManagerFactory.js';
-import { ConfigType } from './storage/config/factory/ConfigType.js';
-import type { BotConfig } from './storage/config/types/BotConfig.js';
-import { BotStatus } from './storage/config/types/BotStatus.js';
-import { promisify } from 'util';
-import os from 'os';
-
-const execPromise = promisify(exec);
+import type { C2MProcessTransportData, M2CProcessTransportData, InternalData } from '../type/transport.js';
+import { isM2CProcessTransportData, isC2MProcessTransportData, isInternalData } from '../type/transport.js';
+import type { ConfigManagerFactory } from '../storage/config/factory/ConfigManagerFactory.js';
+import { ConfigType } from '../storage/config/factory/ConfigType.js';
+import type { BotConfig } from '../storage/config/types/BotConfig.js';
+import { BotStatus } from '../storage/config/types/BotStatus.js';
+import { waitForExit, isProcessAlive, forceKillProcess } from './utils.js';
 
 //子进程管理条目（运行时状态，不持久化）
 interface BotProcessEntry {
@@ -20,6 +18,44 @@ interface BotProcessEntry {
     status: BotStatus;           // 当前运行时状态
     lastHeartbeat: number;       // 最后收到心跳的时间戳
     startTime: number;           // 条目创建（启动）时间戳
+}
+
+/** createBot 输入参数 */
+export interface CreateBotConfig {
+    /** Minecraft 用户名 */
+    name: string;
+    /** 服务器地址 */
+    server: string;
+    /** 服务器端口 */
+    port: number;
+    /** 服务器密码（可选，不传则使用模板默认） */
+    password?: string;
+    /** 显示名称（可选，不传则默认同 name） */
+    displayName?: string;
+    /** 是否启用自动重连（可选） */
+    autoReconnect?: boolean;
+    /** 最大重连次数（可选） */
+    maxReconnect?: number;
+    /** 重连间隔毫秒（可选） */
+    reconnectInterval?: number;
+    /** 认证 Token（可选） */
+    token?: string;
+    /** 命令前缀（可选） */
+    commandPrefix?: string;
+    /** 是否启用（可选） */
+    enabled?: boolean;
+    /** 最大重试次数（可选） */
+    maxRetries?: number;
+    /** 权限列表（可选） */
+    permissions?: string[];
+    /** Webhook URL（可选） */
+    webhookUrl?: string | null;
+}
+
+/** createBot 返回结果 */
+export interface CreateBotResult {
+    botId: string;
+    config: BotConfig;
 }
 
 // Bot 信息响应结构（用于 API 输出，不包含 password）
@@ -119,11 +155,8 @@ export class BotManager {
         }
 
         const existingEntry = this.botProcesses[botId];
-        const isRunning = existingEntry &&
-            !existingEntry.process.killed &&
-            existingEntry.process.exitCode === null;
 
-        if (isRunning) {
+        if (existingEntry && isProcessAlive(existingEntry.process)) {
             if (!force) {
                 throw new Error(
                     `[BotManager] Bot ${botId} 当前状态为 ${existingEntry.status}，` +
@@ -132,49 +165,7 @@ export class BotManager {
             }
 
             // force=true：强制终止现有进程
-            const child = existingEntry.process;
-            const pid = existingEntry.pid;
-
-            // 先尝试优雅关闭
-            try {
-                child.kill('SIGTERM');
-            } catch {
-                // Windows 上忽略信号错误
-            }
-
-            // 等待进程退出（最多 5 秒）
-            await new Promise<void>((resolve) => {
-                const deadline = Date.now() + 5000;
-                const waitExit = () => {
-                    if (child.killed || child.exitCode !== null) {
-                        resolve();
-                        return;
-                    }
-                    if (Date.now() >= deadline) {
-                        resolve();
-                        return;
-                    }
-                    setImmediate(waitExit);
-                };
-                waitExit();
-            });
-
-            // 若仍未退出则强杀
-            if (!child.killed && child.exitCode === null) {
-                if (os.platform() === 'win32') {
-                    try {
-                        await execPromise(`taskkill /F /T /PID ${pid}`);
-                    } catch {
-                        // 忽略 taskkill 错误
-                    }
-                } else {
-                    try {
-                        child.kill('SIGKILL');
-                    } catch {
-                        // 忽略错误
-                    }
-                }
-            }
+            await forceKillProcess(existingEntry.process, existingEntry.pid, 5000);
 
             // 清理旧条目
             delete this.botProcesses[botId];
@@ -289,17 +280,14 @@ export class BotManager {
         }
         for (const [botId, entry] of Object.entries(this.botProcesses)) {
             const child = entry.process;
-            if (child.killed || child.exitCode !== null) {
+            if (!isProcessAlive(child)) {
                 continue; // 已经退出的不处理
             }
             child.send({ type: 'internal:pid' });
         }
         const start = Date.now();
         const requiredBots = Object.keys(this.botProcesses).filter(
-            id => {
-                const e = this.botProcesses[id];
-                return e && !e.process.killed && e.process.exitCode === null;
-            }
+            id => isProcessAlive(this.botProcesses[id]?.process)
         );
         await new Promise<void>(resolve => {
             const check = () => {
@@ -320,7 +308,7 @@ export class BotManager {
         });
         for (const botId of requiredBots) {
             const e = this.botProcesses[botId];
-            if (!e || e.process.killed || e.process.exitCode !== null) continue;
+            if (!e || !isProcessAlive(e.process)) continue;
             const pidMsg = this.internalData[botId]?.pid;
             if (!pidMsg || typeof pidMsg?.message?.pid !== 'number') {
                 unresponsiveBots.push(botId);
@@ -328,51 +316,9 @@ export class BotManager {
         }
         for (const botId of unresponsiveBots) {
             const entry = this.botProcesses[botId];
-            if (!entry || entry.process.killed || entry.process.exitCode !== null) continue;
+            if (!entry || !isProcessAlive(entry.process)) continue;
 
-            const child = entry.process;
-            const pid = entry.pid; // 优先使用独立存储的 pid（可能已被 IPC 确认更新）
-
-            // 优雅终止
-            try {
-                child.kill('SIGTERM');
-            } catch {
-                // 在 Windows 上忽略信号参数错误，kill 本身仍会尝试终止
-            }
-
-            // 等待 gracePeriodMs
-            await new Promise<void>(resolve => {
-                const deadline = Date.now() + gracePeriodMs;
-                const waitExit = () => {
-                    if (child.killed || child.exitCode !== null) {
-                        resolve();
-                        return;
-                    }
-                    if (Date.now() >= deadline) {
-                        resolve(); // 超时，进入强杀阶段
-                        return;
-                    }
-                    setImmediate(waitExit);
-                };
-                waitExit();
-            });
-
-            // 若仍然存活，强杀
-            if (!child.killed && child.exitCode === null) {
-                if (os.platform() === 'win32') {
-                    try {
-                        await execPromise(`taskkill /F /T /PID ${pid}`);
-                    } catch (e) {
-                        // 忽略 taskkill 错误
-                    }
-                } else {
-                    try {
-                        child.kill('SIGKILL');
-                    } catch {
-                        // 忽略错误
-                    }
-                }
-            }
+            await forceKillProcess(entry.process, entry.pid, gracePeriodMs);
 
             // 清理管理结构
             delete this.botProcesses[botId];
@@ -406,7 +352,57 @@ export class BotManager {
         }
     }
 
-    // ─── 配置同步 ─────────────────────────────────────────────────────────────
+
+    /**
+     * 停止指定 Bot 子进程
+     * @param botId                Bot UUID
+     * @param options.timeout      等待子进程优雅退出的超时时间（毫秒），默认 5000
+     * @param options.gracePeriodMs  强杀阶段等待 SIGTERM 生效的时间（毫秒），默认 5000
+     * @returns 停止结果 { success, message, pid? }
+     */
+    async stopBot(
+        botId: string,
+        options?: { timeout?: number; gracePeriodMs?: number }
+    ): Promise<{ success: boolean; message: string; pid?: number }> {
+        const entry = this.botProcesses[botId];
+        if (!entry || !isProcessAlive(entry.process)) {
+            if (this.botProcesses[botId]) delete this.botProcesses[botId];
+            if (this.internalData[botId]) delete this.internalData[botId];
+            const result: { success: boolean; message: string; pid?: number } = {
+                success: true,
+                message: `Bot ${botId} 当前不在运行状态`,
+            };
+            if (entry?.pid) result.pid = entry.pid;
+            return result;
+        }
+
+        const child = entry.process;
+        const timeout = options?.timeout ?? 5000;
+        const gracePeriodMs = options?.gracePeriodMs ?? 5000;
+        const pid = entry.pid;
+
+        // 1. 发送 IPC stop 消息请求优雅关闭
+        const stopMsg: M2CProcessTransportData = { type: 'stop' };
+        child.send(stopMsg);
+
+        // 2. 等待 timeout 毫秒让进程自行退出
+        await waitForExit(child, timeout);
+
+        // 3. 若仍未退出则强杀
+        if (isProcessAlive(child)) {
+            await forceKillProcess(child, pid, gracePeriodMs);
+        }
+
+        delete this.botProcesses[botId];
+        delete this.internalData[botId];
+
+        return {
+            success: true,
+            message: `Bot ${botId} 已停止`,
+            pid,
+        };
+    }
+
 
     /**
      * 向指定 Bot 子进程推送配置更新，同时写入本地配置文件
@@ -419,8 +415,6 @@ export class BotManager {
         if (!child || child.killed || child.exitCode !== null) {
             console.warn(`[BotManager] Bot ${botId} 未运行，仅更新配置文件`);
         }
-
-        // 1. 更新本地配置文件
         try {
             const mgr = this.configFactory.create<BotConfig>(ConfigType.BOT, botId);
             await mgr.write(patch);
@@ -428,8 +422,6 @@ export class BotManager {
             console.error(`[BotManager] 写入配置失败 bot=${botId}:`, err);
             return;
         }
-
-        // 2. 向子进程推送配置
         if (child && !child.killed && child.exitCode === null) {
             const pushMsg: M2CProcessTransportData = {
                 type: 'config:push',
@@ -437,6 +429,39 @@ export class BotManager {
             };
             child.send(pushMsg);
         }
+    }
+
+    /**
+     * 创建新的 Bot 配置
+     *
+     * 流程：
+     *   1) 生成 UUID 作为 botId
+     *   2) 通过 ConfigManagerFactory 获取配置管理器
+     *   3) 调用 mgr.read() 按模板生成默认配置并持久化（创建假人）
+     *   4) 调用 mgr.write(config) 用传入参数覆盖默认配置
+     *
+     * @param config  必填：name / server / port；其余可选
+     * @returns       新 Bot 的 botId 和完整配置
+     * @throws        当 ConfigManagerFactory 未设置时抛出错误
+     */
+    async createBot(config: CreateBotConfig): Promise<CreateBotResult> {
+        if (!this.configFactory) {
+            throw new Error('[BotManager] ConfigManagerFactory 未设置，无法创建 Bot');
+        }
+
+        // 1) 生成唯一 botId
+        const botId = crypto.randomUUID();
+
+        // 2) 获取配置管理器
+        const mgr = this.configFactory.create<BotConfig>(ConfigType.BOT, botId);
+
+        // 3) 先按模板创建默认配置（假人）
+        await mgr.read();
+
+        // 4) 用传入参数覆盖
+        const finalConfig = await mgr.write(config);
+
+        return { botId, config: finalConfig };
     }
 
     /**
@@ -487,7 +512,7 @@ export class BotManager {
             const mgr = this.configFactory.create<BotConfig>(ConfigType.BOT, botId);
             const config = await mgr.read();
             const entry = this.botProcesses[botId];
-            const isActive = !!entry && !entry.process.killed && entry.process.exitCode === null;
+            const isActive = isProcessAlive(entry?.process);
 
             return {
                 id: config.botId,
