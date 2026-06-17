@@ -32,6 +32,7 @@
     "dayjs": "^1.11.20",
     "env-paths": "^4.0.0",
     "fastify": "^5.8.5",
-    "fs": "^0.0.1-security"
+    "fs": "^0.0.1-security",
+    "zod": "^4.4.3"
   }
 }

@@ -33,3 +33,7 @@ export { FileConfigManager } from "./managers/FileConfigManager.js";
 // ─── 工厂 ────────────────────────────────────────────────────────────────────
 export { ConfigManagerFactory } from "./factory/ConfigManagerFactory.js";
 export { ConfigType } from "./factory/ConfigType.js";
+
+// ─── 验证工具 ────────────────────────────────────────────────────────────────
+export { validateConfig } from "./utils/ConfigValidator.js";
+export type { ValidationOptions, ValidationResult } from "./utils/ConfigValidator.js";

@@ -1,23 +1,28 @@
-import { spawn, exec, execFile, fork, ChildProcess } from 'child_process';
+import { fork } from 'child_process';
+import crypto from 'node:crypto';
 import EventEmitter from 'events';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import { isM2CProcessTransportData, isC2MProcessTransportData, isInternalData } from '../type/transport.js';
 import { ConfigType } from '../storage/config/factory/ConfigType.js';
 import { BotStatus } from '../storage/config/types/BotStatus.js';
-import { promisify } from 'util';
-import os from 'os';
-const execPromise = promisify(exec);
+import { waitForExit, isProcessAlive, forceKillProcess } from './utils.js';
 export class BotManager {
     messageBus = new EventEmitter(); //子进程消息事件总线
     botProcesses = {};
     internalData = {}; //根据botId和messageType索引的容器
+    heartbeatMonitorTimer = null;
     registerMessageBus() {
-        //心跳事件：记录最后心跳时间并回复
+        //心跳事件：记录最后心跳时间、同步 PID、重置失跳计数、回复确认
         this.messageBus.on("heartbeat", (msg) => {
             const entry = this.botProcesses[msg.botId];
             if (entry) {
                 entry.lastHeartbeat = Date.now();
+                entry.missedHeartbeats = 0;
+                // 子进程心跳附带 pid 时，覆盖条目中的记录
+                if (typeof msg.pid === 'number' && msg.pid > 0) {
+                    entry.pid = msg.pid;
+                }
             }
             const m = { type: "heartbeat" };
             this.botProcesses[msg.botId]?.process.send(m);
@@ -83,10 +88,24 @@ export class BotManager {
     /**
      * 通过 botId 从配置文件读取完整配置，然后启动子进程
      * @param botId  Bot UUID
+     * @param force  是否强制重新启动。如果为 true 且 bot 进程存活，先终止再重新启动
+     * @throws 当 bot 非离线状态且 force=false 时抛出错误
      */
-    async startBot(botId) {
+    async startBot(botId, force = false) {
         if (!this.configFactory) {
             throw new Error('[BotManager] ConfigManagerFactory 未设置，无法启动 Bot');
+        }
+        const existingEntry = this.botProcesses[botId];
+        if (existingEntry && isProcessAlive(existingEntry.process)) {
+            if (!force) {
+                throw new Error(`[BotManager] Bot ${botId} 当前状态为 ${existingEntry.status}，` +
+                    '无法启动（仅允许在离线状态下启动）。如需强制重启请设置 force=true');
+            }
+            // force=true：强制终止现有进程
+            await forceKillProcess(existingEntry.process, existingEntry.pid, 5000);
+            // 清理旧条目
+            delete this.botProcesses[botId];
+            delete this.internalData[botId];
         }
         // 从配置文件读取 Bot 配置
         const mgr = this.configFactory.create(ConfigType.BOT, botId);
@@ -106,6 +125,7 @@ export class BotManager {
             status: BotStatus.STARTING,
             lastHeartbeat: now,
             startTime: now,
+            missedHeartbeats: 0,
         };
         // 等待子进程就绪后，通过 IPC 发送完整配置
         // 使用 setImmediate 确保 fork 已完成内部初始化
@@ -171,106 +191,28 @@ export class BotManager {
         }
     }
     /**
-     * 清理超时未响应的子进程
-     * - 向所有子进程请求 pid
-     * - 在 requestTimeoutMs 内未收到响应的进程视为无响应
-     * - 先发送 SIGTERM，等待 gracePeriodMs 后若仍存活则强杀
+     * 清理超时未响应的子进程（基于 lastHeartbeat 时间戳判断）
+     * - 检查所有存活子进程的 lastHeartbeat 是否在指定超时内
+     * - 超时的进程先 SIGTERM，等待 gracePeriodMs 后若仍存活则强杀
      * - 兼容 Windows / Linux
+     *
+     * @param heartbeatTimeoutMs  心跳超时阈值（毫秒），默认 20s
+     * @param gracePeriodMs       强杀阶段等待时间（毫秒），默认 5000
      */
-    async cleanupUnresponsiveBots(requestTimeoutMs = 5000, gracePeriodMs = 5000) {
-        const unresponsiveBots = [];
-        for (const botId of Object.keys(this.botProcesses)) {
-            if (this.internalData[botId]?.pid) {
-                delete this.internalData[botId].pid;
-            }
-        }
+    async cleanupUnresponsiveBots(heartbeatTimeoutMs = 20000, gracePeriodMs = 5000) {
+        const now = Date.now();
         for (const [botId, entry] of Object.entries(this.botProcesses)) {
-            const child = entry.process;
-            if (child.killed || child.exitCode !== null) {
-                continue; // 已经退出的不处理
-            }
-            child.send({ type: 'internal:pid' });
-        }
-        const start = Date.now();
-        const requiredBots = Object.keys(this.botProcesses).filter(id => {
-            const e = this.botProcesses[id];
-            return e && !e.process.killed && e.process.exitCode === null;
-        });
-        await new Promise(resolve => {
-            const check = () => {
-                // 所有存活子进程均已响应，或超时
-                const allResponded = requiredBots.every(botId => {
-                    const e = this.botProcesses[botId];
-                    if (!e || e.process.killed || e.process.exitCode !== null)
-                        return true; // 已退出视为不再需要
-                    return !!this.internalData[botId]?.pid;
-                });
-                if (allResponded || Date.now() - start >= requestTimeoutMs) {
-                    resolve();
-                    return;
-                }
-                setImmediate(check);
-            };
-            check();
-        });
-        for (const botId of requiredBots) {
-            const e = this.botProcesses[botId];
-            if (!e || e.process.killed || e.process.exitCode !== null)
+            if (!isProcessAlive(entry.process)) {
+                // 进程已退出，清理残留条目
+                delete this.botProcesses[botId];
+                delete this.internalData[botId];
                 continue;
-            const pidMsg = this.internalData[botId]?.pid;
-            if (!pidMsg || typeof pidMsg?.message?.pid !== 'number') {
-                unresponsiveBots.push(botId);
             }
-        }
-        for (const botId of unresponsiveBots) {
-            const entry = this.botProcesses[botId];
-            if (!entry || entry.process.killed || entry.process.exitCode !== null)
+            const elapsed = now - entry.lastHeartbeat;
+            if (elapsed <= heartbeatTimeoutMs)
                 continue;
-            const child = entry.process;
-            const pid = entry.pid; // 优先使用独立存储的 pid（可能已被 IPC 确认更新）
-            // 优雅终止
-            try {
-                child.kill('SIGTERM');
-            }
-            catch {
-                // 在 Windows 上忽略信号参数错误，kill 本身仍会尝试终止
-            }
-            // 等待 gracePeriodMs
-            await new Promise(resolve => {
-                const deadline = Date.now() + gracePeriodMs;
-                const waitExit = () => {
-                    if (child.killed || child.exitCode !== null) {
-                        resolve();
-                        return;
-                    }
-                    if (Date.now() >= deadline) {
-                        resolve(); // 超时，进入强杀阶段
-                        return;
-                    }
-                    setImmediate(waitExit);
-                };
-                waitExit();
-            });
-            // 若仍然存活，强杀
-            if (!child.killed && child.exitCode === null) {
-                if (os.platform() === 'win32') {
-                    try {
-                        await execPromise(`taskkill /F /T /PID ${pid}`);
-                    }
-                    catch (e) {
-                        // 忽略 taskkill 错误
-                    }
-                }
-                else {
-                    try {
-                        child.kill('SIGKILL');
-                    }
-                    catch {
-                        // 忽略错误
-                    }
-                }
-            }
-            // 清理管理结构
+            console.warn(`[BotManager] Bot ${botId} 心跳超时 (${elapsed}ms)，执行清理`);
+            await forceKillProcess(entry.process, entry.pid, gracePeriodMs);
             delete this.botProcesses[botId];
             delete this.internalData[botId];
         }
@@ -302,7 +244,102 @@ export class BotManager {
             }
         }
     }
-    // ─── 配置同步 ─────────────────────────────────────────────────────────────
+    /**
+     * 启动心跳监控定时器
+     * - 定时检查所有子进程的 lastHeartbeat，维护 missedHeartbeats 计数
+     * - 连续失跳达到阈值后自动清理
+     *
+     * @param intervalMs    检查间隔（毫秒），默认 5000
+     * @param timeoutMs     单次心跳超时阈值（毫秒），默认 15000
+     * @param maxMissed     最大连续失跳次数，超过后执行清理，默认 3
+     */
+    startHeartbeatMonitor(intervalMs = 5000, timeoutMs = 15000, maxMissed = 3) {
+        if (this.heartbeatMonitorTimer) {
+            console.warn('[BotManager] 心跳监控已启动，跳过重复启动');
+            return;
+        }
+        this.heartbeatMonitorTimer = setInterval(() => {
+            const now = Date.now();
+            for (const [botId, entry] of Object.entries(this.botProcesses)) {
+                // 进程已退出，直接清理
+                if (!isProcessAlive(entry.process)) {
+                    delete this.botProcesses[botId];
+                    delete this.internalData[botId];
+                    continue;
+                }
+                const elapsed = now - entry.lastHeartbeat;
+                if (elapsed > timeoutMs) {
+                    entry.missedHeartbeats++;
+                    if (entry.missedHeartbeats >= maxMissed) {
+                        console.warn(`[BotManager] Bot ${botId} 连续 ${entry.missedHeartbeats} 次心跳失联，` +
+                            `上次心跳距今 ${elapsed}ms，执行清理`);
+                        entry.status = BotStatus.ERROR;
+                        // 异步清理（不阻塞定时器循环）
+                        this.cleanupUnresponsiveBots(timeoutMs).catch((err) => {
+                            console.error(`[BotManager] 清理 Bot ${botId} 失败:`, err);
+                        });
+                    }
+                }
+                else {
+                    // 心跳正常，重置失跳计数
+                    entry.missedHeartbeats = 0;
+                }
+            }
+        }, intervalMs);
+        // 允许定时器不阻止进程退出
+        if (this.heartbeatMonitorTimer && typeof this.heartbeatMonitorTimer === 'object' && 'unref' in this.heartbeatMonitorTimer) {
+            this.heartbeatMonitorTimer.unref();
+        }
+    }
+    /**
+     * 停止心跳监控定时器
+     */
+    stopHeartbeatMonitor() {
+        if (this.heartbeatMonitorTimer) {
+            clearInterval(this.heartbeatMonitorTimer);
+            this.heartbeatMonitorTimer = null;
+        }
+    }
+    /**
+     * 停止指定 Bot 子进程
+     * @param botId                Bot UUID
+     * @param options.timeout      等待子进程优雅退出的超时时间（毫秒），默认 5000
+     * @param options.gracePeriodMs  强杀阶段等待 SIGTERM 生效的时间（毫秒），默认 5000
+     * @returns 停止结果 { success, message, pid? }
+     */
+    async stopBot(botId, options) {
+        const entry = this.botProcesses[botId];
+        if (!entry || !isProcessAlive(entry.process)) {
+            if (this.botProcesses[botId])
+                delete this.botProcesses[botId];
+            if (this.internalData[botId])
+                delete this.internalData[botId];
+            const result = {
+                success: true,
+                message: `Bot ${botId} 当前不在运行状态`,
+            };
+            if (entry?.pid)
+                result.pid = entry.pid;
+            return result;
+        }
+        const child = entry.process;
+        const timeout = options?.timeout ?? 5000;
+        const gracePeriodMs = options?.gracePeriodMs ?? 5000;
+        const pid = entry.pid;
+        const stopMsg = { type: 'stop' };
+        child.send(stopMsg);
+        await waitForExit(child, timeout);
+        if (isProcessAlive(child)) {
+            await forceKillProcess(child, pid, gracePeriodMs);
+        }
+        delete this.botProcesses[botId];
+        delete this.internalData[botId];
+        return {
+            success: true,
+            message: `Bot ${botId} 已停止`,
+            pid,
+        };
+    }
     /**
      * 向指定 Bot 子进程推送配置更新，同时写入本地配置文件
      * @param botId  Bot UUID
@@ -314,7 +351,6 @@ export class BotManager {
         if (!child || child.killed || child.exitCode !== null) {
             console.warn(`[BotManager] Bot ${botId} 未运行，仅更新配置文件`);
         }
-        // 1. 更新本地配置文件
         try {
             const mgr = this.configFactory.create(ConfigType.BOT, botId);
             await mgr.write(patch);
@@ -323,7 +359,6 @@ export class BotManager {
             console.error(`[BotManager] 写入配置失败 bot=${botId}:`, err);
             return;
         }
-        // 2. 向子进程推送配置
         if (child && !child.killed && child.exitCode === null) {
             const pushMsg = {
                 type: 'config:push',
@@ -331,6 +366,54 @@ export class BotManager {
             };
             child.send(pushMsg);
         }
+    }
+    /**
+     * 创建新的 Bot 配置
+     * @param config  必填：name / server / port；其余可选
+     * @returns       新 Bot 的 botId 和完整配置
+     * @throws        当 ConfigManagerFactory 未设置时抛出错误
+     */
+    async createBot(config) {
+        if (!this.configFactory) {
+            throw new Error('[BotManager] ConfigManagerFactory 未设置，无法创建 Bot');
+        }
+        const botId = crypto.randomUUID();
+        const mgr = this.configFactory.create(ConfigType.BOT, botId);
+        await mgr.read();
+        const finalConfig = await mgr.write(config);
+        return { botId, config: finalConfig };
+    }
+    /**
+     * 删除指定 Bot 的配置和运行时状态
+     * @param botId               Bot UUID
+     * @param options.force        如果为 true 且 bot 进程存活，自动停止后再删除；否则抛错
+     * @throws                    ConfigManagerFactory 未设置时抛错
+     * @throws                    Bot 进程存活且 force=false 时抛错
+     */
+    async deleteBot(botId, options) {
+        if (!this.configFactory) {
+            throw new Error('[BotManager] ConfigManagerFactory 未设置，无法删除 Bot');
+        }
+        const entry = this.botProcesses[botId];
+        if (entry && isProcessAlive(entry.process)) {
+            if (!options?.force) {
+                throw new Error(`[BotManager] Bot ${botId} 仍在运行，请先停止或设置 force=true`);
+            }
+            // force=true 时自动停止进程
+            await this.stopBot(botId);
+        }
+        // 删除配置文件（文件不存在时 mgr.delete() 内部跳过，不抛错）
+        try {
+            const mgr = this.configFactory.create(ConfigType.BOT, botId);
+            await mgr.delete();
+        }
+        catch (err) {
+            console.warn(`[BotManager] 删除配置文件失败 bot=${botId}:`, err);
+        }
+        // 确保内存条目已清理
+        delete this.botProcesses[botId];
+        delete this.internalData[botId];
+        return { success: true, message: `Bot ${botId} 已删除`, botId };
     }
     /**
      * 获取指定 Bot 的完整配置（从文件读取）
@@ -347,7 +430,6 @@ export class BotManager {
             return null;
         }
     }
-    // ─── 运行时状态查询 ──────────────────────────────────────────────────────
     /**
      * 获取当前在线 Bot 数量（状态为 ONLINE）
      */
@@ -370,6 +452,7 @@ export class BotManager {
     }
     /**
      * 获取单个 Bot 的综合信息（配置 + 运行时状态）
+     * @returns 与 v2 API 兼容的信息对象，不含 password
      */
     async getBotInfo(botId) {
         if (!this.configFactory)
@@ -378,7 +461,7 @@ export class BotManager {
             const mgr = this.configFactory.create(ConfigType.BOT, botId);
             const config = await mgr.read();
             const entry = this.botProcesses[botId];
-            const isActive = !!entry && !entry.process.killed && entry.process.exitCode === null;
+            const isActive = isProcessAlive(entry?.process);
             return {
                 id: config.botId,
                 name: config.name,
