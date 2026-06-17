@@ -7,12 +7,16 @@ import archiver from "archiver";
 export default class Logger {
     __BASEDIR = envPaths("mc-moriabot-v3");
     __LOGPATH = this.__BASEDIR.log;
+    __SYSLOG_PATH = path.join(this.__BASEDIR.log, "system");
     __MAX_READ_BYTES;
+    __logLevel;
     __mutex = Promise.resolve(); // 互斥锁
-    constructor(maxReadBytes) {
+    __LEVEL_PRIORITY = { debug: 0, info: 1, warn: 2, error: 3 };
+    constructor(maxReadBytes, logLevel = "info") {
         this.__MAX_READ_BYTES = maxReadBytes;
-        this.rotateLog().catch(err => {
-            console.error("[LOGGER] 构造期间轮转日志失败:", err);
+        this.__logLevel = logLevel;
+        this.rotateLog().catch(async (err) => {
+            await this.sysLog("error", "Logger", `构造期间轮转日志失败: ${err}`);
         });
     }
     async log(uuid, type, message) {
@@ -24,7 +28,7 @@ export default class Logger {
         try {
             console.log(message);
             await this.ensureDir();
-            await fs.appendFile(filePath, message + "\n", "utf-8");
+            await fs.appendFile(filePath, messages + "\n", "utf-8");
             return true;
         }
         catch (error) {
@@ -141,10 +145,57 @@ export default class Logger {
             }
         }
         catch (err) {
-            console.error(`[LOGGER] 轮转日志失败:`, err);
+            await this.sysLog("error", "Logger", `轮转日志失败: ${err}`);
         }
         finally {
             release();
         }
+    }
+    // 系统日志
+    async sysLog(level, module, message) {
+        // 级别过滤：低于当前配置级别的不记录
+        if (this.__LEVEL_PRIORITY[level] < this.__LEVEL_PRIORITY[this.__logLevel]) {
+            return true;
+        }
+        const safeMessage = message.replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+        const filePath = path.join(this.__SYSLOG_PATH, "system.log");
+        const release = await this.lock();
+        const line = `[${dayjs().format("YYYY-MM-DD HH:mm:ss")}][${level.toUpperCase()}][${module}]${safeMessage}`;
+        try {
+            // 控制台输出（映射到对应 console 方法）
+            switch (level) {
+                case "debug":
+                    console.debug(line);
+                    break;
+                case "info":
+                    console.info(line);
+                    break;
+                case "warn":
+                    console.warn(line);
+                    break;
+                case "error":
+                    console.error(line);
+                    break;
+            }
+            await this.ensureSysDir();
+            await fs.appendFile(filePath, line + "\n", "utf-8");
+            return true;
+        }
+        catch (error) {
+            console.error(`[LOGGER] 系统日志写入失败:`, error);
+            return false;
+        }
+        finally {
+            release();
+        }
+    }
+    setLogLevel(level) {
+        this.__logLevel = level;
+    }
+    async ensureSysDir() {
+        try {
+            await fs.mkdir(this.__SYSLOG_PATH, { recursive: true });
+        }
+        catch { }
     }
 }

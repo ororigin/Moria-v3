@@ -7,11 +7,14 @@ import { isM2CProcessTransportData, isC2MProcessTransportData, isInternalData } 
 import { ConfigType } from '../storage/config/factory/ConfigType.js';
 import { BotStatus } from '../storage/config/types/BotStatus.js';
 import { waitForExit, isProcessAlive, forceKillProcess } from './utils.js';
+import { validateConfig } from '../storage/config/utils/ConfigValidator.js';
+import Logger from '../storage/log/Logger.js';
 export class BotManager {
     messageBus = new EventEmitter(); //子进程消息事件总线
     botProcesses = {};
     internalData = {}; //根据botId和messageType索引的容器
     heartbeatMonitorTimer = null;
+    logger;
     registerMessageBus() {
         //心跳事件：记录最后心跳时间、同步 PID、重置失跳计数、回复确认
         this.messageBus.on("heartbeat", (msg) => {
@@ -62,7 +65,7 @@ export class BotManager {
                 await mgr.write(msg.config);
             }
             catch (err) {
-                console.error(`[BotManager] 同步配置失败 bot=${msg.botId}:`, err);
+                this.logger?.sysLog("error", "BotManager", `同步配置失败 bot=${msg.botId}: ${err}`);
             }
         });
     }
@@ -84,6 +87,10 @@ export class BotManager {
     // 延迟注入 configFactory（用于旧式构造后配置）
     setConfigFactory(factory) {
         this.configFactory = factory;
+    }
+    // 延迟注入 Logger（用于旧式构造后配置）
+    setLogger(logger) {
+        this.logger = logger;
     }
     /**
      * 通过 botId 从配置文件读取完整配置，然后启动子进程
@@ -135,6 +142,7 @@ export class BotManager {
             config,
         };
         botChildProcess.send(initMsg);
+        this.logger?.sysLog("info", "BotManager", `Bot ${botId} 已启动`);
     }
     /**
      * 获取指定 bot 子进程的 pid
@@ -211,7 +219,7 @@ export class BotManager {
             const elapsed = now - entry.lastHeartbeat;
             if (elapsed <= heartbeatTimeoutMs)
                 continue;
-            console.warn(`[BotManager] Bot ${botId} 心跳超时 (${elapsed}ms)，执行清理`);
+            this.logger?.sysLog("warn", "BotManager", `Bot ${botId} 心跳超时 (${elapsed}ms)，执行清理`);
             await forceKillProcess(entry.process, entry.pid, gracePeriodMs);
             delete this.botProcesses[botId];
             delete this.internalData[botId];
@@ -255,7 +263,7 @@ export class BotManager {
      */
     startHeartbeatMonitor(intervalMs = 5000, timeoutMs = 15000, maxMissed = 3) {
         if (this.heartbeatMonitorTimer) {
-            console.warn('[BotManager] 心跳监控已启动，跳过重复启动');
+            this.logger?.sysLog("warn", "BotManager", '心跳监控已启动，跳过重复启动');
             return;
         }
         this.heartbeatMonitorTimer = setInterval(() => {
@@ -271,12 +279,11 @@ export class BotManager {
                 if (elapsed > timeoutMs) {
                     entry.missedHeartbeats++;
                     if (entry.missedHeartbeats >= maxMissed) {
-                        console.warn(`[BotManager] Bot ${botId} 连续 ${entry.missedHeartbeats} 次心跳失联，` +
-                            `上次心跳距今 ${elapsed}ms，执行清理`);
+                        this.logger?.sysLog("warn", "BotManager", `Bot ${botId} 连续 ${entry.missedHeartbeats} 次心跳失联，上次心跳距今 ${elapsed}ms，执行清理`);
                         entry.status = BotStatus.ERROR;
                         // 异步清理（不阻塞定时器循环）
                         this.cleanupUnresponsiveBots(timeoutMs).catch((err) => {
-                            console.error(`[BotManager] 清理 Bot ${botId} 失败:`, err);
+                            this.logger?.sysLog("error", "BotManager", `清理 Bot ${botId} 失败: ${err}`);
                         });
                     }
                 }
@@ -334,6 +341,7 @@ export class BotManager {
         }
         delete this.botProcesses[botId];
         delete this.internalData[botId];
+        this.logger?.sysLog("info", "BotManager", `Bot ${botId} 已停止`);
         return {
             success: true,
             message: `Bot ${botId} 已停止`,
@@ -349,14 +357,14 @@ export class BotManager {
         const entry = this.botProcesses[botId];
         const child = entry?.process;
         if (!child || child.killed || child.exitCode !== null) {
-            console.warn(`[BotManager] Bot ${botId} 未运行，仅更新配置文件`);
+            this.logger?.sysLog("warn", "BotManager", `Bot ${botId} 未运行，仅更新配置文件`);
         }
         try {
             const mgr = this.configFactory.create(ConfigType.BOT, botId);
             await mgr.write(patch);
         }
         catch (err) {
-            console.error(`[BotManager] 写入配置失败 bot=${botId}:`, err);
+            this.logger?.sysLog("error", "BotManager", `写入配置失败 bot=${botId}: ${err}`);
             return;
         }
         if (child && !child.killed && child.exitCode === null) {
@@ -369,18 +377,29 @@ export class BotManager {
     }
     /**
      * 创建新的 Bot 配置
-     * @param config  必填：name / server / port；其余可选
-     * @returns       新 Bot 的 botId 和完整配置
-     * @throws        当 ConfigManagerFactory 未设置时抛出错误
+     * @param configJson  JSON 格式的配置字符串（支持 BotConfig 的子集字段）
+     * @returns           新 Bot 的 botId 和完整配置
+     * @throws            JSON 格式非法时抛出错误
+     * @throws            配置字段校验失败时抛出错误
+     * @throws            ConfigManagerFactory 未设置时抛出错误
      */
-    async createBot(config) {
+    async createBot(configJson) {
         if (!this.configFactory) {
             throw new Error('[BotManager] ConfigManagerFactory 未设置，无法创建 Bot');
+        }
+        // 校验 JSON 格式与字段合法性（partial 模式：只校验存在的字段）
+        const result = validateConfig(ConfigType.BOT, configJson, {
+            mode: 'partial',
+            allowUnknown: false,
+        });
+        if (!result.success) {
+            throw new Error(`[BotManager] 配置校验失败: ${result.errors.join('; ')}`);
         }
         const botId = crypto.randomUUID();
         const mgr = this.configFactory.create(ConfigType.BOT, botId);
         await mgr.read();
-        const finalConfig = await mgr.write(config);
+        const finalConfig = await mgr.write(result.data);
+        this.logger?.sysLog("info", "BotManager", `Bot ${botId} 已创建`);
         return { botId, config: finalConfig };
     }
     /**
@@ -408,11 +427,12 @@ export class BotManager {
             await mgr.delete();
         }
         catch (err) {
-            console.warn(`[BotManager] 删除配置文件失败 bot=${botId}:`, err);
+            this.logger?.sysLog("warn", "BotManager", `删除配置文件失败 bot=${botId}: ${err}`);
         }
         // 确保内存条目已清理
         delete this.botProcesses[botId];
         delete this.internalData[botId];
+        this.logger?.sysLog("info", "BotManager", `Bot ${botId} 已删除`);
         return { success: true, message: `Bot ${botId} 已删除`, botId };
     }
     /**
