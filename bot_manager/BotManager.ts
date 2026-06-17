@@ -1,4 +1,4 @@
-import { fork, type ChildProcess } from 'child_process';
+import { fork } from 'child_process';
 import crypto from 'node:crypto';
 import EventEmitter from 'events';
 import { fileURLToPath } from 'url';
@@ -9,67 +9,9 @@ import type { ConfigManagerFactory } from '../storage/config/factory/ConfigManag
 import { ConfigType } from '../storage/config/factory/ConfigType.js';
 import type { BotConfig } from '../storage/config/types/BotConfig.js';
 import { BotStatus } from '../storage/config/types/BotStatus.js';
+import type { BotProcessEntry, CreateBotResult, BotInfoResponse } from './type/DataStructure.js';
 import { waitForExit, isProcessAlive, forceKillProcess } from './utils.js';
-
-//子进程管理条目（运行时状态，不持久化）
-interface BotProcessEntry {
-    process: ChildProcess;
-    pid: number;                 // 创建时从 child.pid 写入，可被心跳/IPC 确认更新
-    status: BotStatus;           // 当前运行时状态
-    lastHeartbeat: number;       // 最后收到心跳的时间戳
-    startTime: number;           // 条目创建（启动）时间戳
-    missedHeartbeats: number;    // 连续失跳次数，由心跳监控定时器维护
-}
-
-/** createBot 输入参数 */
-export interface CreateBotConfig {
-    /** Minecraft 用户名 */
-    name: string;
-    /** 服务器地址 */
-    server: string;
-    /** 服务器端口 */
-    port: number;
-    /** 服务器密码（可选，不传则使用模板默认） */
-    password?: string;
-    /** 显示名称（可选，不传则默认同 name） */
-    displayName?: string;
-    /** 是否启用自动重连（可选） */
-    autoReconnect?: boolean;
-    /** 最大重连次数（可选） */
-    maxReconnect?: number;
-    /** 重连间隔毫秒（可选） */
-    reconnectInterval?: number;
-    /** 认证 Token（可选） */
-    token?: string;
-    /** 命令前缀（可选） */
-    commandPrefix?: string;
-    /** 是否启用（可选） */
-    enabled?: boolean;
-    /** 最大重试次数（可选） */
-    maxRetries?: number;
-    /** 权限列表（可选） */
-    permissions?: string[];
-    /** Webhook URL（可选） */
-    webhookUrl?: string | null;
-}
-
-/** createBot 返回结果 */
-export interface CreateBotResult {
-    botId: string;
-    config: BotConfig;
-}
-
-// Bot 信息响应结构（用于 API 输出，不包含 password）
-export interface BotInfoResponse {
-    id: string;
-    name: string;
-    server: string;
-    port: number;
-    status: string;         // BotStatus 的中文值："在线" | "离线" | "启动中" | "错误"
-    is_active: boolean;     // 进程是否存活
-    last_activity: string;  // ISO 8601
-    created_at: string;     // ISO 8601
-}
+import { validateConfig } from '../storage/config/utils/ConfigValidator.js';
 
 export class BotManager {
     messageBus = new EventEmitter(); //子进程消息事件总线
@@ -478,18 +420,32 @@ export class BotManager {
 
     /**
      * 创建新的 Bot 配置
-     * @param config  必填：name / server / port；其余可选
-     * @returns       新 Bot 的 botId 和完整配置
-     * @throws        当 ConfigManagerFactory 未设置时抛出错误
+     * @param configJson  JSON 格式的配置字符串（支持 BotConfig 的子集字段）
+     * @returns           新 Bot 的 botId 和完整配置
+     * @throws            JSON 格式非法时抛出错误
+     * @throws            配置字段校验失败时抛出错误
+     * @throws            ConfigManagerFactory 未设置时抛出错误
      */
-    async createBot(config: CreateBotConfig): Promise<CreateBotResult> {
+    async createBot(configJson: string): Promise<CreateBotResult> {
         if (!this.configFactory) {
             throw new Error('[BotManager] ConfigManagerFactory 未设置，无法创建 Bot');
         }
+
+        // 校验 JSON 格式与字段合法性（partial 模式：只校验存在的字段）
+        const result = validateConfig<Partial<BotConfig>>(ConfigType.BOT, configJson, {
+            mode: 'partial',
+            allowUnknown: false,
+        });
+        if (!result.success) {
+            throw new Error(
+                `[BotManager] 配置校验失败: ${result.errors.join('; ')}`
+            );
+        }
+
         const botId = crypto.randomUUID();
         const mgr = this.configFactory.create<BotConfig>(ConfigType.BOT, botId);
         await mgr.read();
-        const finalConfig = await mgr.write(config);
+        const finalConfig = await mgr.write(result.data!);
         return { botId, config: finalConfig };
     }
 
