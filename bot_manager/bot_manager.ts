@@ -380,15 +380,9 @@ export class BotManager {
         const timeout = options?.timeout ?? 5000;
         const gracePeriodMs = options?.gracePeriodMs ?? 5000;
         const pid = entry.pid;
-
-        // 1. 发送 IPC stop 消息请求优雅关闭
         const stopMsg: M2CProcessTransportData = { type: 'stop' };
         child.send(stopMsg);
-
-        // 2. 等待 timeout 毫秒让进程自行退出
         await waitForExit(child, timeout);
-
-        // 3. 若仍未退出则强杀
         if (isProcessAlive(child)) {
             await forceKillProcess(child, pid, gracePeriodMs);
         }
@@ -433,13 +427,6 @@ export class BotManager {
 
     /**
      * 创建新的 Bot 配置
-     *
-     * 流程：
-     *   1) 生成 UUID 作为 botId
-     *   2) 通过 ConfigManagerFactory 获取配置管理器
-     *   3) 调用 mgr.read() 按模板生成默认配置并持久化（创建假人）
-     *   4) 调用 mgr.write(config) 用传入参数覆盖默认配置
-     *
      * @param config  必填：name / server / port；其余可选
      * @returns       新 Bot 的 botId 和完整配置
      * @throws        当 ConfigManagerFactory 未设置时抛出错误
@@ -448,20 +435,51 @@ export class BotManager {
         if (!this.configFactory) {
             throw new Error('[BotManager] ConfigManagerFactory 未设置，无法创建 Bot');
         }
-
-        // 1) 生成唯一 botId
         const botId = crypto.randomUUID();
-
-        // 2) 获取配置管理器
         const mgr = this.configFactory.create<BotConfig>(ConfigType.BOT, botId);
-
-        // 3) 先按模板创建默认配置（假人）
         await mgr.read();
-
-        // 4) 用传入参数覆盖
         const finalConfig = await mgr.write(config);
-
         return { botId, config: finalConfig };
+    }
+
+    /**
+     * 删除指定 Bot 的配置和运行时状态
+     * @param botId               Bot UUID
+     * @param options.force        如果为 true 且 bot 进程存活，自动停止后再删除；否则抛错
+     * @throws                    ConfigManagerFactory 未设置时抛错
+     * @throws                    Bot 进程存活且 force=false 时抛错
+     */
+    async deleteBot(
+        botId: string,
+        options?: { force?: boolean }
+    ): Promise<{ success: boolean; message: string; botId: string }> {
+        if (!this.configFactory) {
+            throw new Error('[BotManager] ConfigManagerFactory 未设置，无法删除 Bot');
+        }
+
+        const entry = this.botProcesses[botId];
+        if (entry && isProcessAlive(entry.process)) {
+            if (!options?.force) {
+                throw new Error(
+                    `[BotManager] Bot ${botId} 仍在运行，请先停止或设置 force=true`
+                );
+            }
+            // force=true 时自动停止进程
+            await this.stopBot(botId);
+        }
+        // 删除配置文件（文件不存在时 mgr.delete() 内部跳过，不抛错）
+        try {
+            const mgr = this.configFactory.create<BotConfig>(ConfigType.BOT, botId);
+            await mgr.delete();
+        } catch (err) {
+            console.warn(`[BotManager] 删除配置文件失败 bot=${botId}:`, err);
+        }
+
+        // 确保内存条目已清理
+        delete this.botProcesses[botId];
+        delete this.internalData[botId];
+
+        return { success: true, message: `Bot ${botId} 已删除`, botId };
     }
 
     /**
@@ -477,8 +495,6 @@ export class BotManager {
             return null;
         }
     }
-
-    // ─── 运行时状态查询 ──────────────────────────────────────────────────────
 
     /**
      * 获取当前在线 Bot 数量（状态为 ONLINE）
