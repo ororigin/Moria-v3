@@ -291,6 +291,31 @@ export class BotManager {
     }
 
     /**
+     * 获取指定 Bot 的运行日志或聊天记录
+     * 
+     * 底层调用 Logger.read()，日志文件命名规则：
+     *   - type="log"  → 读取 `<botId>-log.log`（运行日志）
+     *   - type="chat" → 读取 `<botId>-chat.log`（聊天记录）
+     *
+     * @param botId     Bot UUID
+     * @param type      日志类型：`"log"`（运行日志）或 `"chat"`（聊天记录）
+     * @param lineCount 返回行数，默认 50
+     * @returns 日志行数组，每行格式为 `[YYYY-MM-DD HH:mm:ss]消息内容`
+     */
+    async getBotLog(botId: string, type: 'log' | 'chat', lineCount: number = 50): Promise<string[]> {
+        if (!this.logger) {
+            return [];
+        }
+        if (type !== 'log' && type !== 'chat') {
+            return [];
+        }
+        if (lineCount <= 0) {
+            lineCount = 50;
+        }
+        return this.logger.read(botId, type, lineCount);
+    }
+
+    /**
      * 启动心跳监控定时器
      * - 定时检查所有子进程的 lastHeartbeat，维护 missedHeartbeats 计数
      * - 连续失跳达到阈值后自动清理
