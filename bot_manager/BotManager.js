@@ -68,6 +68,21 @@ export class BotManager {
                 this.logger?.sysLog("error", "BotManager", `同步配置失败 bot=${msg.botId}: ${err}`);
             }
         });
+        // 聊天消息事件：子进程上报游戏内聊天 → 写入日志
+        this.messageBus.on("chat", (msg) => {
+            if (!msg.message)
+                return;
+            this.logger?.log(msg.botId, "chat", msg.message);
+        });
+        // 日志事件：子进程上报运行日志 → 按 bot 分文件存储
+        this.messageBus.on("log", (msg) => {
+            if (!msg.message)
+                return;
+            this.logger?.log(msg.botId, "log", msg.message);
+            if (msg.level === "error" || msg.level === "warn") {
+                this.logger?.sysLog(msg.level, `Bot-${msg.botId}`, msg.message);
+            }
+        });
     }
     botScriptPath;
     configFactory;
@@ -253,6 +268,30 @@ export class BotManager {
         }
     }
     /**
+     * 获取指定 Bot 的运行日志或聊天记录
+     *
+     * 底层调用 Logger.read()，日志文件命名规则：
+     *   - type="log"  → 读取 `<botId>-log.log`（运行日志）
+     *   - type="chat" → 读取 `<botId>-chat.log`（聊天记录）
+     *
+     * @param botId     Bot UUID
+     * @param type      日志类型：`"log"`（运行日志）或 `"chat"`（聊天记录）
+     * @param lineCount 返回行数，默认 50
+     * @returns 日志行数组，每行格式为 `[YYYY-MM-DD HH:mm:ss]消息内容`
+     */
+    async getBotLog(botId, type, lineCount = 50) {
+        if (!this.logger) {
+            return [];
+        }
+        if (type !== 'log' && type !== 'chat') {
+            return [];
+        }
+        if (lineCount <= 0) {
+            lineCount = 50;
+        }
+        return this.logger.read(botId, type, lineCount);
+    }
+    /**
      * 启动心跳监控定时器
      * - 定时检查所有子进程的 lastHeartbeat，维护 missedHeartbeats 计数
      * - 连续失跳达到阈值后自动清理
@@ -374,6 +413,55 @@ export class BotManager {
             };
             child.send(pushMsg);
         }
+    }
+    /**
+     * 向指定 Bot 子进程发送聊天命令
+     * @param botId   Bot UUID
+     * @param command 要发送的聊天消息
+     * @returns 是否成功发送（false 表示 bot 未运行）
+     */
+    async sendCommand(botId, command) {
+        const entry = this.botProcesses[botId];
+        if (!entry || !isProcessAlive(entry.process)) {
+            this.logger?.sysLog("warn", "BotManager", `Bot ${botId} 未在运行，无法发送命令`);
+            return false;
+        }
+        const msg = {
+            type: 'chat',
+            msg: command,
+        };
+        entry.process.send(msg);
+        this.logger?.sysLog("info", "BotManager", `命令已发送到 Bot ${botId}: ${command}`);
+        return true;
+    }
+    /**
+     * 向指定 Bot 子进程发送预设动作指令
+     *
+     * 支持的动作索引：
+     *   '1' — 乘坐周围最近的矿车（MountMinecartCommand）
+     *   '2' — 停止骑乘（DismountCommand）
+     *
+     * @param botId       Bot UUID
+     * @param actionIndex 动作索引（'1' 或 '2'）
+     * @returns 是否成功发送（false 表示 bot 未运行或动作索引无效）
+     */
+    async executeAction(botId, actionIndex) {
+        if (actionIndex !== '1' && actionIndex !== '2') {
+            this.logger?.sysLog("warn", "BotManager", `无效的动作索引: ${actionIndex}，仅支持 '1'（上矿车）或 '2'（下矿车）`);
+            return false;
+        }
+        const entry = this.botProcesses[botId];
+        if (!entry || !isProcessAlive(entry.process)) {
+            this.logger?.sysLog("warn", "BotManager", `Bot ${botId} 未在运行，无法执行动作`);
+            return false;
+        }
+        const msg = {
+            type: 'action',
+            index: actionIndex,
+        };
+        entry.process.send(msg);
+        this.logger?.sysLog("info", "BotManager", `动作 ${actionIndex} 已发送到 Bot ${botId}`);
+        return true;
     }
     /**
      * 创建新的 Bot 配置

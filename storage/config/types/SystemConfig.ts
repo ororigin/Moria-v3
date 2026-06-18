@@ -10,4 +10,5 @@ export interface SystemConfig extends IConfig {
   maxConnections: number;
   maintenanceMode: boolean;
   allowedOrigins: string[];
+  port: number;
 }

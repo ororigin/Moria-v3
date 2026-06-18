@@ -14,6 +14,7 @@ export class SystemConfigTemplate {
             maxConnections: 100,
             maintenanceMode: false,
             allowedOrigins: ["http://localhost:3000"],
+            port: 3000,
             createdAt: now,
             updatedAt: now,
         };

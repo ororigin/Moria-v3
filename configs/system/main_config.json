@@ -1,0 +1,12 @@
+{
+  "version": "1.0.0",
+  "logLevel": "info",
+  "maxConnections": 100,
+  "maintenanceMode": false,
+  "allowedOrigins": [
+    "http://localhost:3000"
+  ],
+  "port": 3000,
+  "createdAt": "2026-06-18T02:08:35.637Z",
+  "updatedAt": "2026-06-18T02:08:35.637Z"
+}
