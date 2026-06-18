@@ -1,8 +1,11 @@
 import fastify from "fastify";
 import type { FastifyInstance } from "fastify";
 import apiRoutes from "./api/index.js";
+import legacyRoutes from "./api/legacy/index.js";
 import type ILogger from "./storage/log/ILogger.js";
 import type { LogLevel } from "./storage/log/ILogger.js";
+import type { BotManager } from "./bot_manager/BotManager.js";
+import type { SystemMonitor } from "./system/monitor/SystemMonitor.js";
 
 // ─── 选项接口 ──────────────────────────────────────────────────────────────
 
@@ -17,6 +20,10 @@ export interface AppOptions {
   host?: string;
   /** 监听端口，默认 3000，来自 SystemConfig.port */
   port?: number;
+  /** BotManager 实例（管理 Bot 子进程生命周期） */
+  botManager?: BotManager;
+  /** SystemMonitor 实例（系统性能监控） */
+  systemMonitor?: SystemMonitor;
 }
 
 // ─── Fastify 实例类型扩展 ─────────────────────────────────────────────────
@@ -25,6 +32,10 @@ declare module "fastify" {
   interface FastifyInstance {
     /** 通过 decorate 注入的 Moria 系统版本号 */
     appVersion: string;
+    /** 通过 decorate 注入的 BotManager 实例 */
+    botManager: BotManager;
+    /** 通过 decorate 注入的 SystemMonitor 实例 */
+    systemMonitor: SystemMonitor;
   }
 }
 
@@ -60,8 +71,21 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   // 注入版本号供路由使用
   app.decorate("appVersion", version);
 
-  // 注册 API 路由
-  await app.register(apiRoutes);
+  // 注入 BotManager 供路由使用
+  if (options.botManager) {
+    app.decorate("botManager", options.botManager);
+  }
+
+  // 注入 SystemMonitor 供路由使用
+  if (options.systemMonitor) {
+    app.decorate("systemMonitor", options.systemMonitor);
+  }
+
+  // 注册新 RESTful API 路由（/api 前缀）
+  await app.register(apiRoutes, { prefix: "/api" });
+
+  // 注册旧路径 308 重定向（保持 v2 向后兼容）
+  await app.register(legacyRoutes);
 
   // ── 生命周期钩子 ──
 

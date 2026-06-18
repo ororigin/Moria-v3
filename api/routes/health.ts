@@ -1,17 +1,15 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { success } from "../types/responses.js";
 
 /**
- * GET /health — 健康检查端点
- *
- * 返回服务器运行状态、版本号和当前时间戳。
- * 版本号通过 fastify.decorate("appVersion") 注入。
+ * GET /api/health — 健康检查
  */
 export default async function healthRoute(fastify: FastifyInstance): Promise<void> {
-  fastify.get("/health", async (_request: FastifyRequest, _reply: FastifyReply) => {
-    return {
+  fastify.get("/health", async () => {
+    return success({
       status: "ok",
       version: fastify.appVersion,
       timestamp: new Date().toISOString(),
-    };
+    });
   });
 }

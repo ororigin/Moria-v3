@@ -46,7 +46,7 @@ export const systemConfigSchema = z.object({
   maxConnections: z.number().int("maxConnections 必须是整数").min(0, "maxConnections 不能为负"),
   maintenanceMode: z.boolean(),
   allowedOrigins: z.array(z.string(), "allowedOrigins 必须是字符串数组"),
-
+  port: z.number().int("port 必须是整数").min(1).max(65535),
   // ─── Timestamps ───
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
