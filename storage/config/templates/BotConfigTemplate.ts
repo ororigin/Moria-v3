@@ -20,7 +20,7 @@ export class BotConfigTemplate implements IConfigTemplate<BotConfig> {
       host: "localhost",
       server: "localhost",
       port: 25565,
-      password: "ufdbfcir",
+      password: "12345678",
 
       // 重连
       autoReconnect: true,
