@@ -34,7 +34,6 @@
     "utils/**/*.ts",
     "index.ts",
     "app.ts",
-    "logger.ts"
   ],
   "exclude": [
     "node_modules",
