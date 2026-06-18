@@ -6,7 +6,7 @@ import fss from "fs";
 import dayjs from "dayjs";
 import envPaths from 'env-paths';
 import path from "path";
-import archiver from "archiver";
+import { ZipArchive } from "archiver";
 
 export default class Logger implements ILogger {
 
@@ -138,7 +138,7 @@ export default class Logger implements ILogger {
 
                 await new Promise<void>((resolve, reject) => {
                     const output = fss.createWriteStream(archivePath);
-                    const arch = archiver("zip", { zlib: { level: 9 } });
+                    const arch = new ZipArchive({ zlib: { level: 9 } });
                     output.on('close', resolve);
                     arch.on('error', reject);
                     arch.pipe(output);
