@@ -5,18 +5,20 @@ export class BotManager {
     onWhisper;
     sendLog;
     sendStatus;
+    onChat;
     bot = null;
     reconnectAttempts = 0;
     reconnectTimer;
     shouldExit = false;
     context;
     constructor(config, dispatcher, // 用于清空队列和中断持久命令
-    onWhisper, sendLog = () => { }, sendStatus = () => { }) {
+    onWhisper, sendLog = () => { }, sendStatus = () => { }, onChat = () => { }) {
         this.config = config;
         this.dispatcher = dispatcher;
         this.onWhisper = onWhisper;
         this.sendLog = sendLog;
         this.sendStatus = sendStatus;
+        this.onChat = onChat;
         this.context = { bot: null, config, getBot() {
                 if (!this.bot)
                     throw new Error('Context not fully initialized');
@@ -73,7 +75,7 @@ export class BotManager {
         bot.on('whisper', (username, message) => {
             setImmediate(() => this.onWhisper(username, message));
         });
-        // 自动注册/登录的消息监听.
+        // 自动注册/登录 + 上报聊天消息到主进程
         bot.on('messagestr', (message) => {
             if (message.includes('/reg') && message.includes('注册')) {
                 bot.chat(`/reg ${this.config.password} ${this.config.password}@outlook.com`);
@@ -81,6 +83,8 @@ export class BotManager {
             if (message.includes('/l') || message.includes('登录')) {
                 bot.chat(`/l ${this.config.password}`);
             }
+            // 将聊天信息上报到主进程
+            this.onChat(message);
         });
     }
     scheduleReconnect() {

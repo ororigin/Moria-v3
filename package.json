@@ -1,11 +1,13 @@
 {
   "name": "moria-v3",
   "version": "1.0.0",
-  "main": "index.ts",
+  "main": "dist/index.js",
   "scripts": {
+    "clean": "node -e \"const fs=require('fs'); ['dist','bots/dist'].forEach(d=>fs.rmSync(d,{recursive:true,force:true}))\"",
     "build": "tsc",
     "build:bots": "cd bots && tsc",
     "build:bots:prod": "cd bots && tsc --project tsconfig.prod.json",
+    "rebuild": "npm run clean && npm run build",
     "watch:bots": "cd bots && tsc --watch",
     "dev:bots": "concurrently \"npm run watch:bots\" \"npm run serve:bots\"",
     "serve:bots": "nodemon --watch bots/dist ./bots/dist/bot.js",

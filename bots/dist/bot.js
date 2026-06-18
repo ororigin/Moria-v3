@@ -13,7 +13,7 @@ import { isM2CProcessTransportData } from './type/transport.js';
 // configured = true  ↔ 来自 IPC 的完整配置（含所有 BotRuntimeConfig 字段）
 // configured = false ↔ 仅 argv / 默认值，无完整配置文件
 async function main() {
-    // ── 步骤 1: 尝试从 argv 解析 ──────────────────────────────────────────────
+    //  尝试从 argv 解析
     const argvBotId = process.argv[2];
     const argvName = process.argv[3];
     const argvHost = process.argv[4];
@@ -22,7 +22,7 @@ async function main() {
     let config = null;
     /** 是否拥有完整配置（来自 IPC init） */
     let configured = false;
-    // ── 步骤 2: argv 提供完整连接参数 ✓ ──────────────────────────────────────
+    //argv 提供完整连接参数 
     if (argvBotId && argvName && argvHost && !isNaN(argvPort)) {
         config = {
             botId: argvBotId,
@@ -33,7 +33,7 @@ async function main() {
             password: argvPass || 'ufdbfcir',
         };
     }
-    // ── 步骤 3: argv 参数不足 → 等待 IPC init（10s 超时） ────────────────────
+    // 等待 IPC init（10s 超时）
     else {
         config = await new Promise((resolve) => {
             const timeout = setTimeout(() => resolve(null), 10000);
@@ -50,7 +50,7 @@ async function main() {
         if (config) {
             configured = true;
         }
-        // ── 步骤 4: IPC 超时 → 用 argv 已有部分 + 默认值降级 ─────────────────
+        //IPC 超时
         else {
             config = {
                 ...(argvBotId ? { botId: argvBotId } : {}),
@@ -63,14 +63,14 @@ async function main() {
                 console.warn(`[bot] 警告: 未收到父进程配置，使用有限参数+默认值启动 (configured=false)`);
             }
             else {
-                // 连最基本的 botId/name 都没有，此时确实无法启动
+                // 无法启动
                 console.error('[bot] 错误: 未提供 botId 或 name，无法启动');
                 console.error('Usage: node bot.js <botId> <name> <host> <port> [password]');
                 process.exit(1);
             }
         }
     }
-    // ── 步骤 5: 规范化并填充全部默认值 ──────────────────────────────────────
+    //规范化并填充全部默认值
     const cfg = {
         botId: config.botId ?? '',
         name: config.name ?? '',
@@ -117,7 +117,7 @@ async function main() {
      */
     function applyConfigPush(patch) {
         Object.assign(cfg, patch);
-        sendOutput('log', { message: `配置已更新: ${Object.keys(patch).join(', ')}` });
+        sendOutput('log', { message: `配置已更新: ${Object.keys(patch).join(', ')}`, level: 'info' });
         // 发送确认
         sendOutput('config:update:ack', { config: patch });
     }
@@ -132,7 +132,7 @@ async function main() {
         transport.send(output);
     }
     // 命令调度器
-    const dispatcher = new CommandDispatcher(context, (type) => sendOutput('log', { message: `WARN-${type}` }));
+    const dispatcher = new CommandDispatcher(context, (type) => sendOutput('log', { message: `WARN-${type}`, level: 'warn' }));
     // 解析器
     const resolver = new CommandResolver();
     // 游戏内私聊处理
@@ -143,13 +143,17 @@ async function main() {
     };
     // 日志与状态推送（供 BotManager 内部调用）
     const botManagerSendLog = (msg, isError = false) => {
-        sendOutput('log', { message: msg, error: isError });
+        sendOutput('log', { message: msg, level: isError ? 'error' : 'info' });
     };
     const botManagerSendStatus = (status) => {
         sendOutput('status', { status });
     };
+    // 聊天消息上报（供 BotManager 内部调用）
+    const botManagerSendChat = (message) => {
+        sendOutput('chat', { message });
+    };
     // 创建 BotManager
-    const botManager = new BotManager(cfg, dispatcher, onWhisper, botManagerSendLog, botManagerSendStatus);
+    const botManager = new BotManager(cfg, dispatcher, onWhisper, botManagerSendLog, botManagerSendStatus, botManagerSendChat);
     // 父进程存活检测
     const HEARTBEAT_TIMEOUT_MS = 16000;
     let heartbeatTimeout = null;
@@ -164,7 +168,7 @@ async function main() {
         heartbeatTimeout = setTimeout(() => {
             sendOutput('log', {
                 message: `心跳超时（${HEARTBEAT_TIMEOUT_MS / 1000}秒无响应），进程退出`,
-                error: true,
+                level: 'error',
             });
             botManager.shutdown();
         }, HEARTBEAT_TIMEOUT_MS);
@@ -177,7 +181,7 @@ async function main() {
         }
         // 处理关闭事件
         if (msg.type === 'internal:disconnect' || msg.type === 'internal:stdin_end') {
-            sendOutput('log', { message: '通信通道关闭，正在退出...' });
+            sendOutput('log', { message: '通信通道关闭，正在退出...', level: 'info' });
             clearHeartbeatTimeout();
             botManager.shutdown();
             return;
@@ -208,7 +212,7 @@ async function main() {
                 dispatcher.dispatch(result);
             }
             else if (result.type === 'privileged') {
-                sendOutput('log', { message: '收到停止命令，正在退出...' });
+                sendOutput('log', { message: '收到停止命令，正在退出...', level: 'info' });
                 clearHeartbeatTimeout();
                 botManager.shutdown();
             }
@@ -216,30 +220,30 @@ async function main() {
         catch (e) {
             sendOutput('log', {
                 message: `解析消息失败: ${e.message}`,
-                error: true,
+                level: 'error',
             });
         }
     });
     //系统信号处理
     process.on('SIGTERM', () => {
-        sendOutput('log', { message: '收到 SIGTERM 信号，正在退出...' });
+        sendOutput('log', { message: '收到 SIGTERM 信号，正在退出...', level: 'info' });
         clearHeartbeatTimeout();
         botManager.shutdown();
     });
     process.on('SIGINT', () => {
-        sendOutput('log', { message: '收到 SIGINT 信号，正在退出...' });
+        sendOutput('log', { message: '收到 SIGINT 信号，正在退出...', level: 'info' });
         clearHeartbeatTimeout();
         botManager.shutdown();
     });
-    // 心跳定时发送
+    // 心跳定时发送（附带进程 PID，供父进程确认）
     setInterval(() => {
-        sendOutput('heartbeat');
+        sendOutput('heartbeat', { pid: process.pid });
     }, 8000);
     // 上报配置状态
     sendOutput('status', { status: 'starting', configured });
     // 启动 
     botManager.start();
-    sendOutput('log', { message: `假人进程启动 - ${cfg.name} @ ${cfg.host}:${cfg.port} (configured=${configured})` });
+    sendOutput('log', { message: `假人进程启动 - ${cfg.name} @ ${cfg.host}:${cfg.port} (configured=${configured})`, level: 'info' });
     resetHeartbeatTimeout();
 }
 // 启动主流程

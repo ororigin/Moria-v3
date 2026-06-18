@@ -1,44 +1,46 @@
 {
-  // Visit https://aka.ms/tsconfig to read more about this file
   "compilerOptions": {
-    // File Layout
-    // "rootDir": "./src",
+    /* === 编译输出 === */
     "outDir": "./dist",
+    "rootDir": ".",
 
-    // Environment Settings
-    // See also https://aka.ms/tsconfig/module
+    /* === 环境设置 === */
     "module": "nodenext",
+    "moduleResolution": "nodenext",
     "target": "esnext",
     "types": [],
-    // For nodejs:
-    // "lib": ["esnext"],
-    // "types": ["node"],
-    // and npm install -D @types/node
 
-    // Other Outputs (关闭 declaration / sourceMap 避免 .d.ts / .map 文件散落在源码中)
-    // "sourceMap": true,
-    // "declaration": true,
-    // "declarationMap": true,
-
-    // Stricter Typechecking Options
+    /* === 严格模式 === */
+    "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
-
-    // Style Options
-    // "noImplicitReturns": true,
-    // "noImplicitOverride": true,
-    // "noUnusedLocals": true,
-    // "noUnusedParameters": true,
-    // "noFallthroughCasesInSwitch": true,
-    // "noPropertyAccessFromIndexSignature": true,
-
-    // Recommended Options
-    "strict": true,
-    "jsx": "react-jsx",
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
     "noUncheckedSideEffectImports": true,
     "moduleDetection": "force",
     "skipLibCheck": true,
-  }
+
+    /* === 源码映射（调试用，按需开启） === */
+    // "sourceMap": true,
+    // "declaration": true,
+    // "declarationMap": true,
+  },
+  "include": [
+    "api/**/*.ts",
+    "bot_manager/**/*.ts",
+    "storage/**/*.ts",
+    "system/**/*.ts",
+    "type/**/*.ts",
+    "utils/**/*.ts",
+    "index.ts",
+    "app.ts",
+    "logger.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "bots",
+    "configs",
+    "v2旧版本功能参考"
+  ]
 }
