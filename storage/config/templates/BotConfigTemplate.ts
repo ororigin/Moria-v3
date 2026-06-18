@@ -28,7 +28,7 @@ export class BotConfigTemplate implements IConfigTemplate<BotConfig> {
       reconnectInterval: 5000,
 
       // 配置
-      commandPrefix: "!",
+      commandPrefix: "#",
 
       // 时间戳 
       createdAt: now,
