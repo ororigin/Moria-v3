@@ -9,7 +9,7 @@ export class IpcTransport implements Transport {
 
   send(data: Record<string, any>): void {
     if (process.send) {
-      process.send(JSON.stringify(data));
+      process.send(data);
     }
   }
 
