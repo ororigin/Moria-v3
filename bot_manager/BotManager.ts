@@ -419,6 +419,57 @@ export class BotManager {
     }
 
     /**
+     * 向指定 Bot 子进程发送聊天命令
+     * @param botId   Bot UUID
+     * @param command 要发送的聊天消息
+     * @returns 是否成功发送（false 表示 bot 未运行）
+     */
+    async sendCommand(botId: string, command: string): Promise<boolean> {
+        const entry = this.botProcesses[botId];
+        if (!entry || !isProcessAlive(entry.process)) {
+            this.logger?.sysLog("warn", "BotManager", `Bot ${botId} 未在运行，无法发送命令`);
+            return false;
+        }
+        const msg: M2CProcessTransportData = {
+            type: 'chat',
+            msg: command,
+        };
+        entry.process.send(msg);
+        this.logger?.sysLog("info", "BotManager", `命令已发送到 Bot ${botId}: ${command}`);
+        return true;
+    }
+
+    /**
+     * 向指定 Bot 子进程发送预设动作指令
+     *
+     * 支持的动作索引：
+     *   '1' — 乘坐周围最近的矿车（MountMinecartCommand）
+     *   '2' — 停止骑乘（DismountCommand）
+     *
+     * @param botId       Bot UUID
+     * @param actionIndex 动作索引（'1' 或 '2'）
+     * @returns 是否成功发送（false 表示 bot 未运行或动作索引无效）
+     */
+    async executeAction(botId: string, actionIndex: string): Promise<boolean> {
+        if (actionIndex !== '1' && actionIndex !== '2') {
+            this.logger?.sysLog("warn", "BotManager", `无效的动作索引: ${actionIndex}，仅支持 '1'（上矿车）或 '2'（下矿车）`);
+            return false;
+        }
+        const entry = this.botProcesses[botId];
+        if (!entry || !isProcessAlive(entry.process)) {
+            this.logger?.sysLog("warn", "BotManager", `Bot ${botId} 未在运行，无法执行动作`);
+            return false;
+        }
+        const msg: M2CProcessTransportData = {
+            type: 'action',
+            index: actionIndex,
+        };
+        entry.process.send(msg);
+        this.logger?.sysLog("info", "BotManager", `动作 ${actionIndex} 已发送到 Bot ${botId}`);
+        return true;
+    }
+
+    /**
      * 创建新的 Bot 配置
      * @param configJson  JSON 格式的配置字符串（支持 BotConfig 的子集字段）
      * @returns           新 Bot 的 botId 和完整配置
