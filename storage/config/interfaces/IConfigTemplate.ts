@@ -1,4 +1,4 @@
-import type { IConfig } from "./IConfig.js";
+import type { IConfig } from './IConfig.js';
 
 /**
  * 配置模板接口
@@ -7,9 +7,9 @@ import type { IConfig } from "./IConfig.js";
  *  - 声明该类型配置存放的子目录
  */
 export interface IConfigTemplate<T extends IConfig> {
-  /** 返回该类型配置的默认值（模板） */
-  getDefault(name: string): T;
+    /** 返回该类型配置的默认值（模板） */
+    getDefault(name: string): T;
 
-  /** 返回存放该类型配置的子目录名，如 "system" / "bot" */
-  getSubDir(): string;
+    /** 返回存放该类型配置的子目录名，如 "system" / "bot" */
+    getSubDir(): string;
 }

@@ -41,7 +41,7 @@ export function isProcessAlive(child: ChildProcess | null | undefined): child is
 export async function forceKillProcess(
     child: ChildProcess,
     pid: number,
-    gracePeriodMs: number = 5000
+    gracePeriodMs: number = 5000,
 ): Promise<void> {
     if (!isProcessAlive(child)) return;
 

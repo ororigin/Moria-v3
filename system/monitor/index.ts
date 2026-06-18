@@ -5,8 +5,8 @@
  */
 
 // 接口
-export type { ISystemInfo } from "./interfaces/ISystemInfo.js";
-export type { ISystemMonitor } from "./interfaces/ISystemMonitor.js";
+export type { ISystemInfo } from './interfaces/ISystemInfo.js';
+export type { ISystemMonitor } from './interfaces/ISystemMonitor.js';
 
 // 实现
-export { SystemMonitor } from "./SystemMonitor.js";
+export { SystemMonitor } from './SystemMonitor.js';

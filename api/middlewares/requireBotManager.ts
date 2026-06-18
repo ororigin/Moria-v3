@@ -1,6 +1,6 @@
-import type { FastifyReply } from "fastify";
-import type { BotManager } from "../../bot_manager/BotManager.js";
-import { error } from "../types/responses.js";
+import type { FastifyReply } from 'fastify';
+import type { BotManager } from '../../bot_manager/BotManager.js';
+import { error } from '../types/responses.js';
 
 /**
  * 从 Fastify 实例中安全获取 BotManager
@@ -15,13 +15,13 @@ import { error } from "../types/responses.js";
  * ```
  */
 export function getBotManager(
-  fastify: { botManager?: BotManager },
-  reply: FastifyReply,
+    fastify: { botManager?: BotManager },
+    reply: FastifyReply,
 ): BotManager | null {
-  const bm = fastify.botManager;
-  if (!bm) {
-    reply.status(500).send(error("BOT_MANAGER_NOT_READY", "BotManager 未就绪"));
-    return null;
-  }
-  return bm;
+    const bm = fastify.botManager;
+    if (!bm) {
+        reply.status(500).send(error('BOT_MANAGER_NOT_READY', 'BotManager 未就绪'));
+        return null;
+    }
+    return bm;
 }

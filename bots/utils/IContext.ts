@@ -5,28 +5,28 @@ import type { Bot } from 'mineflayer';
  * 必须与 storage/config/types/BotConfig.ts 保持字段一致
  */
 export interface BotRuntimeConfig {
-  botId: string;
-  name: string;
-  host: string;
-  server: string;
-  port: number;
-  password: string;
+    botId: string;
+    name: string;
+    host: string;
+    server: string;
+    port: number;
+    password: string;
 
-  // ─── 重连策略 ────────────────────────────────────────────────────────────
-  autoReconnect: boolean;
-  maxReconnect: number;
-  reconnectInterval: number;
+    // ─── 重连策略 ────────────────────────────────────────────────────────────
+    autoReconnect: boolean;
+    maxReconnect: number;
+    reconnectInterval: number;
 
-  // ─── 通用配置 ─────────────────────────────────────────────────────────────
-  commandPrefix: string;
+    // ─── 通用配置 ─────────────────────────────────────────────────────────────
+    commandPrefix: string;
 
-  // ─── 时间戳（由配置管理器维护） ──────────────────────────────────────────
-  createdAt: string;
-  updatedAt: string;
+    // ─── 时间戳（由配置管理器维护） ──────────────────────────────────────────
+    createdAt: string;
+    updatedAt: string;
 }
 
 export interface IContext {
-  bot: Bot | null;
-  config: BotRuntimeConfig;
-  getBot() : Bot;
+    bot: Bot | null;
+    config: BotRuntimeConfig;
+    getBot(): Bot;
 }

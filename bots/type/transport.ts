@@ -1,50 +1,49 @@
-// ============================================================
 // 🚨 此文件为 type/transport.ts 的副本，必须保持同步！
 // 修改根目录的 type/transport.ts 后请同步更新此文件。
-// ============================================================
 
-//主进程 → 子进程 传输数据格式
+// 主进程 → 子进程 传输数据格式
 export interface M2CProcessTransportData {
-  type: string;
-  [key: string]: any;
+    type: string;
+    [key: string]: any;
 }
 
-//子进程 → 主进程传输数据格式
+// 子进程 → 主进程传输数据格式
 export interface C2MProcessTransportData {
-  type: string;
-  botId: string;
-  timestamp: number;
-  [key: string]: any;
+    type: string;
+    botId: string;
+    timestamp: number;
+    [key: string]: any;
 }
 
-//内部数据包格式
+// 内部数据包格式
 export interface InternalData {
-  type: string;
-  message: Record<string, any>;
+    type: string;
+    message: Record<string, any>;
 }
 
-//类型守卫：判断数据是否为有效的 M2CProcessTransportData
+// 类型守卫：判断数据是否为有效的 M2CProcessTransportData
 export function isM2CProcessTransportData(data: any): data is M2CProcessTransportData {
-  return data && typeof data === 'object' && typeof data.type === 'string';
+    return data && typeof data === 'object' && typeof data.type === 'string';
 }
 
-//类型守卫：判断数据是否为有效的 C2MProcessTransportData
+// 类型守卫：判断数据是否为有效的 C2MProcessTransportData
 export function isC2MProcessTransportData(data: any): data is C2MProcessTransportData {
-  return (
-    data &&
-    typeof data === 'object' &&
-    typeof data.type === 'string' &&
-    typeof data.botId === 'string' &&
-    typeof data.timestamp === 'number'
-  );
+    return (
+        data &&
+        typeof data === 'object' &&
+        typeof data.type === 'string' &&
+        typeof data.botId === 'string' &&
+        typeof data.timestamp === 'number'
+    );
 }
 
-//类型守卫：判断数据是否为有效的 InternalData
+// 类型守卫：判断数据是否为有效的 InternalData
 export function isInternalData(data: any): data is InternalData {
-  return (
-    data &&
-    typeof data === 'object' &&
-    typeof data.type === 'string' &&
-    typeof data.message === 'object' && data.message !== null
-  );
+    return (
+        data &&
+        typeof data === 'object' &&
+        typeof data.type === 'string' &&
+        typeof data.message === 'object' &&
+        data.message !== null
+    );
 }

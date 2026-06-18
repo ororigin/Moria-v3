@@ -3,8 +3,16 @@ import crypto from 'node:crypto';
 import EventEmitter from 'events';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
-import type { C2MProcessTransportData, M2CProcessTransportData, InternalData } from '../type/transport.js';
-import { isM2CProcessTransportData, isC2MProcessTransportData, isInternalData } from '../type/transport.js';
+import type {
+    C2MProcessTransportData,
+    M2CProcessTransportData,
+    InternalData,
+} from '../type/transport.js';
+import {
+    isM2CProcessTransportData,
+    isC2MProcessTransportData,
+    isInternalData,
+} from '../type/transport.js';
 import type { ConfigManagerFactory } from '../storage/config/factory/ConfigManagerFactory.js';
 import { ConfigType } from '../storage/config/factory/ConfigType.js';
 import type { BotConfig } from '../storage/config/types/BotConfig.js';
@@ -18,10 +26,11 @@ export class BotManager {
     messageBus = new EventEmitter(); //子进程消息事件总线
     botProcesses: { [botId: string]: BotProcessEntry } = {};
     internalData: { [botId: string]: { [messageType: string]: C2MProcessTransportData } } = {}; //根据botId和messageType索引的容器
-    private heartbeatMonitorTimer: ReturnType<typeof setInterval> | null = null;    logger!: Logger;
+    private heartbeatMonitorTimer: ReturnType<typeof setInterval> | null = null;
+    logger!: Logger;
     registerMessageBus() {
         //心跳事件：记录最后心跳时间、同步 PID、重置失跳计数、回复确认
-        this.messageBus.on("heartbeat", (msg: C2MProcessTransportData & { pid?: number }) => {
+        this.messageBus.on('heartbeat', (msg: C2MProcessTransportData & { pid?: number }) => {
             const entry = this.botProcesses[msg.botId];
             if (entry) {
                 entry.lastHeartbeat = Date.now();
@@ -31,11 +40,11 @@ export class BotManager {
                     entry.pid = msg.pid;
                 }
             }
-            const m: M2CProcessTransportData = { type: "heartbeat" };
+            const m: M2CProcessTransportData = { type: 'heartbeat' };
             this.botProcesses[msg.botId]?.process.send(m);
         });
         //子进程状态变更事件
-        this.messageBus.on("status", (msg: C2MProcessTransportData & { status?: string }) => {
+        this.messageBus.on('status', (msg: C2MProcessTransportData & { status?: string }) => {
             const entry = this.botProcesses[msg.botId];
             if (!entry || !msg.status) return;
             switch (msg.status) {
@@ -51,7 +60,7 @@ export class BotManager {
             }
         });
         //内部事件
-        this.messageBus.on("internal", (msg: C2MProcessTransportData) => {
+        this.messageBus.on('internal', (msg: C2MProcessTransportData) => {
             if (msg.type === 'internal' && 'internalType' in msg && 'message' in msg) {
                 const messageType = msg.internalType as string;
                 this.internalData[msg.botId] = this.internalData[msg.botId] || {};
@@ -60,28 +69,38 @@ export class BotManager {
             }
         });
         // 配置变更事件：子进程上报配置更改 → 写入本地配置文件
-        this.messageBus.on("config:update", async (msg: C2MProcessTransportData & { config?: Partial<BotConfig> }) => {
-            if (!msg.config || Object.keys(msg.config).length === 0) return;
-            try {
-                const mgr = this.configFactory.create(ConfigType.BOT, msg.botId);
-                await mgr.write(msg.config);
-            } catch (err) {
-                this.logger?.sysLog("error", "BotManager", `同步配置失败 bot=${msg.botId}: ${err}`);
-            }
-        });
+        this.messageBus.on(
+            'config:update',
+            async (msg: C2MProcessTransportData & { config?: Partial<BotConfig> }) => {
+                if (!msg.config || Object.keys(msg.config).length === 0) return;
+                try {
+                    const mgr = this.configFactory.create(ConfigType.BOT, msg.botId);
+                    await mgr.write(msg.config);
+                } catch (err) {
+                    this.logger?.sysLog(
+                        'error',
+                        'BotManager',
+                        `同步配置失败 bot=${msg.botId}: ${err}`,
+                    );
+                }
+            },
+        );
         // 聊天消息事件：子进程上报游戏内聊天 → 写入日志
-        this.messageBus.on("chat", (msg: C2MProcessTransportData & { message?: string }) => {
+        this.messageBus.on('chat', (msg: C2MProcessTransportData & { message?: string }) => {
             if (!msg.message) return;
-            this.logger?.log(msg.botId, "chat", msg.message);
+            this.logger?.log(msg.botId, 'chat', msg.message);
         });
         // 日志事件：子进程上报运行日志 → 按 bot 分文件存储
-        this.messageBus.on("log", (msg: C2MProcessTransportData & { message?: string; level?: string }) => {
-            if (!msg.message) return;
-            this.logger?.log(msg.botId, "log", msg.message);
-            if (msg.level === "error" || msg.level === "warn") {
-                this.logger?.sysLog(msg.level as any, `Bot-${msg.botId}`, msg.message);
-            }
-        });
+        this.messageBus.on(
+            'log',
+            (msg: C2MProcessTransportData & { message?: string; level?: string }) => {
+                if (!msg.message) return;
+                this.logger?.log(msg.botId, 'log', msg.message);
+                if (msg.level === 'error' || msg.level === 'warn') {
+                    this.logger?.sysLog(msg.level as any, `Bot-${msg.botId}`, msg.message);
+                }
+            },
+        );
     }
 
     private botScriptPath: string;
@@ -95,7 +114,9 @@ export class BotManager {
             this.botScriptPath = resolve(__dirname, 'bots', 'dist', 'bot.js');
         } else {
             // 兼容旧式调用：传入 botScriptPath（string）或不传
-            this.botScriptPath = (configFactoryOrScriptPath as string | undefined) ?? resolve(__dirname, 'bots', 'dist', 'bot.js');
+            this.botScriptPath =
+                (configFactoryOrScriptPath as string | undefined) ??
+                resolve(__dirname, 'bots', 'dist', 'bot.js');
             // 如果没有 configFactory，startBot 无法工作，留到 startBot 时抛错
         }
     }
@@ -127,7 +148,7 @@ export class BotManager {
             if (!force) {
                 throw new Error(
                     `[BotManager] Bot ${botId} 当前状态为 ${existingEntry.status}，` +
-                    '无法启动（仅允许在离线状态下启动）。如需强制重启请设置 force=true'
+                        '无法启动（仅允许在离线状态下启动）。如需强制重启请设置 force=true',
                 );
             }
 
@@ -146,7 +167,7 @@ export class BotManager {
         // fork 子进程（仅传 botId 作为标识，详细配置通过 IPC 发送）
         const botChildProcess = fork(this.botScriptPath, [botId]);
 
-        botChildProcess.on("message", (msg: unknown) => {
+        botChildProcess.on('message', (msg: unknown) => {
             if (!isC2MProcessTransportData(msg)) {
                 return;
             }
@@ -165,13 +186,13 @@ export class BotManager {
 
         // 等待子进程就绪后，通过 IPC 发送完整配置
         // 使用 setImmediate 确保 fork 已完成内部初始化
-        await new Promise<void>(resolve => setImmediate(resolve));
+        await new Promise<void>((resolve) => setImmediate(resolve));
         const initMsg: M2CProcessTransportData = {
             type: 'init',
             config,
         };
         botChildProcess.send(initMsg);
-        this.logger?.sysLog("info", "BotManager", `Bot ${botId} 已启动`);
+        this.logger?.sysLog('info', 'BotManager', `Bot ${botId} 已启动`);
     }
 
     /**
@@ -202,7 +223,7 @@ export class BotManager {
                             entry.pid = msg.message.pid;
                         }
                         if (this.internalData[bot_id]?.pid) {
-                            delete this.internalData[bot_id]!.pid;  // 已知 bot_id 条目存在，用 ! 断言
+                            delete this.internalData[bot_id]!.pid; // 已知 bot_id 条目存在，用 ! 断言
                         }
                         resolve(msg.message.pid);
                         return;
@@ -241,7 +262,7 @@ export class BotManager {
      */
     async cleanupUnresponsiveBots(
         heartbeatTimeoutMs: number = 20000,
-        gracePeriodMs: number = 5000
+        gracePeriodMs: number = 5000,
     ): Promise<void> {
         const now = Date.now();
         for (const [botId, entry] of Object.entries(this.botProcesses)) {
@@ -255,7 +276,11 @@ export class BotManager {
             const elapsed = now - entry.lastHeartbeat;
             if (elapsed <= heartbeatTimeoutMs) continue;
 
-            this.logger?.sysLog("warn", "BotManager", `Bot ${botId} 心跳超时 (${elapsed}ms)，执行清理`);
+            this.logger?.sysLog(
+                'warn',
+                'BotManager',
+                `Bot ${botId} 心跳超时 (${elapsed}ms)，执行清理`,
+            );
 
             await forceKillProcess(entry.process, entry.pid, gracePeriodMs);
 
@@ -292,7 +317,7 @@ export class BotManager {
 
     /**
      * 获取指定 Bot 的运行日志或聊天记录
-     * 
+     *
      * 底层调用 Logger.read()，日志文件命名规则：
      *   - type="log"  → 读取 `<botId>-log.log`（运行日志）
      *   - type="chat" → 读取 `<botId>-chat.log`（聊天记录）
@@ -302,7 +327,11 @@ export class BotManager {
      * @param lineCount 返回行数，默认 50
      * @returns 日志行数组，每行格式为 `[YYYY-MM-DD HH:mm:ss]消息内容`
      */
-    async getBotLog(botId: string, type: 'log' | 'chat', lineCount: number = 50): Promise<string[]> {
+    async getBotLog(
+        botId: string,
+        type: 'log' | 'chat',
+        lineCount: number = 50,
+    ): Promise<string[]> {
         if (!this.logger) {
             return [];
         }
@@ -327,10 +356,10 @@ export class BotManager {
     startHeartbeatMonitor(
         intervalMs: number = 5000,
         timeoutMs: number = 15000,
-        maxMissed: number = 3
+        maxMissed: number = 3,
     ): void {
         if (this.heartbeatMonitorTimer) {
-            this.logger?.sysLog("warn", "BotManager", '心跳监控已启动，跳过重复启动');
+            this.logger?.sysLog('warn', 'BotManager', '心跳监控已启动，跳过重复启动');
             return;
         }
 
@@ -351,12 +380,20 @@ export class BotManager {
                     entry.missedHeartbeats++;
 
                     if (entry.missedHeartbeats >= maxMissed) {
-                        this.logger?.sysLog("warn", "BotManager", `Bot ${botId} 连续 ${entry.missedHeartbeats} 次心跳失联，上次心跳距今 ${elapsed}ms，执行清理`);
+                        this.logger?.sysLog(
+                            'warn',
+                            'BotManager',
+                            `Bot ${botId} 连续 ${entry.missedHeartbeats} 次心跳失联，上次心跳距今 ${elapsed}ms，执行清理`,
+                        );
                         entry.status = BotStatus.ERROR;
 
                         // 异步清理（不阻塞定时器循环）
                         this.cleanupUnresponsiveBots(timeoutMs).catch((err) => {
-                            this.logger?.sysLog("error", "BotManager", `清理 Bot ${botId} 失败: ${err}`);
+                            this.logger?.sysLog(
+                                'error',
+                                'BotManager',
+                                `清理 Bot ${botId} 失败: ${err}`,
+                            );
                         });
                     }
                 } else {
@@ -367,7 +404,11 @@ export class BotManager {
         }, intervalMs);
 
         // 允许定时器不阻止进程退出
-        if (this.heartbeatMonitorTimer && typeof this.heartbeatMonitorTimer === 'object' && 'unref' in this.heartbeatMonitorTimer) {
+        if (
+            this.heartbeatMonitorTimer &&
+            typeof this.heartbeatMonitorTimer === 'object' &&
+            'unref' in this.heartbeatMonitorTimer
+        ) {
             this.heartbeatMonitorTimer.unref();
         }
     }
@@ -382,7 +423,6 @@ export class BotManager {
         }
     }
 
-
     /**
      * 停止指定 Bot 子进程
      * @param botId                Bot UUID
@@ -392,7 +432,7 @@ export class BotManager {
      */
     async stopBot(
         botId: string,
-        options?: { timeout?: number; gracePeriodMs?: number }
+        options?: { timeout?: number; gracePeriodMs?: number },
     ): Promise<{ success: boolean; message: string; pid?: number }> {
         const entry = this.botProcesses[botId];
         if (!entry || !isProcessAlive(entry.process)) {
@@ -420,14 +460,13 @@ export class BotManager {
         delete this.botProcesses[botId];
         delete this.internalData[botId];
 
-        this.logger?.sysLog("info", "BotManager", `Bot ${botId} 已停止`);
+        this.logger?.sysLog('info', 'BotManager', `Bot ${botId} 已停止`);
         return {
             success: true,
             message: `Bot ${botId} 已停止`,
             pid,
         };
     }
-
 
     /**
      * 向指定 Bot 子进程推送配置更新，同时写入本地配置文件
@@ -438,13 +477,13 @@ export class BotManager {
         const entry = this.botProcesses[botId];
         const child = entry?.process;
         if (!child || child.killed || child.exitCode !== null) {
-            this.logger?.sysLog("warn", "BotManager", `Bot ${botId} 未运行，仅更新配置文件`);
+            this.logger?.sysLog('warn', 'BotManager', `Bot ${botId} 未运行，仅更新配置文件`);
         }
         try {
             const mgr = this.configFactory.create<BotConfig>(ConfigType.BOT, botId);
             await mgr.write(patch);
         } catch (err) {
-            this.logger?.sysLog("error", "BotManager", `写入配置失败 bot=${botId}: ${err}`);
+            this.logger?.sysLog('error', 'BotManager', `写入配置失败 bot=${botId}: ${err}`);
             return;
         }
         if (child && !child.killed && child.exitCode === null) {
@@ -465,7 +504,7 @@ export class BotManager {
     async sendCommand(botId: string, command: string): Promise<boolean> {
         const entry = this.botProcesses[botId];
         if (!entry || !isProcessAlive(entry.process)) {
-            this.logger?.sysLog("warn", "BotManager", `Bot ${botId} 未在运行，无法发送命令`);
+            this.logger?.sysLog('warn', 'BotManager', `Bot ${botId} 未在运行，无法发送命令`);
             return false;
         }
         const msg: M2CProcessTransportData = {
@@ -473,7 +512,7 @@ export class BotManager {
             msg: command,
         };
         entry.process.send(msg);
-        this.logger?.sysLog("info", "BotManager", `命令已发送到 Bot ${botId}: ${command}`);
+        this.logger?.sysLog('info', 'BotManager', `命令已发送到 Bot ${botId}: ${command}`);
         return true;
     }
 
@@ -490,12 +529,16 @@ export class BotManager {
      */
     async executeAction(botId: string, actionIndex: string): Promise<boolean> {
         if (actionIndex !== '1' && actionIndex !== '2') {
-            this.logger?.sysLog("warn", "BotManager", `无效的动作索引: ${actionIndex}，仅支持 '1'（上矿车）或 '2'（下矿车）`);
+            this.logger?.sysLog(
+                'warn',
+                'BotManager',
+                `无效的动作索引: ${actionIndex}，仅支持 '1'（上矿车）或 '2'（下矿车）`,
+            );
             return false;
         }
         const entry = this.botProcesses[botId];
         if (!entry || !isProcessAlive(entry.process)) {
-            this.logger?.sysLog("warn", "BotManager", `Bot ${botId} 未在运行，无法执行动作`);
+            this.logger?.sysLog('warn', 'BotManager', `Bot ${botId} 未在运行，无法执行动作`);
             return false;
         }
         const msg: M2CProcessTransportData = {
@@ -503,7 +546,7 @@ export class BotManager {
             index: actionIndex,
         };
         entry.process.send(msg);
-        this.logger?.sysLog("info", "BotManager", `动作 ${actionIndex} 已发送到 Bot ${botId}`);
+        this.logger?.sysLog('info', 'BotManager', `动作 ${actionIndex} 已发送到 Bot ${botId}`);
         return true;
     }
 
@@ -526,16 +569,14 @@ export class BotManager {
             allowUnknown: false,
         });
         if (!result.success) {
-            throw new Error(
-                `[BotManager] 配置校验失败: ${result.errors.join('; ')}`
-            );
+            throw new Error(`[BotManager] 配置校验失败: ${result.errors.join('; ')}`);
         }
 
         const botId = crypto.randomUUID();
         const mgr = this.configFactory.create<BotConfig>(ConfigType.BOT, botId);
         await mgr.read();
         const finalConfig = await mgr.write(result.data!);
-        this.logger?.sysLog("info", "BotManager", `Bot ${botId} 已创建`);
+        this.logger?.sysLog('info', 'BotManager', `Bot ${botId} 已创建`);
         return { botId, config: finalConfig };
     }
 
@@ -548,7 +589,7 @@ export class BotManager {
      */
     async deleteBot(
         botId: string,
-        options?: { force?: boolean }
+        options?: { force?: boolean },
     ): Promise<{ success: boolean; message: string; botId: string }> {
         if (!this.configFactory) {
             throw new Error('[BotManager] ConfigManagerFactory 未设置，无法删除 Bot');
@@ -557,9 +598,7 @@ export class BotManager {
         const entry = this.botProcesses[botId];
         if (entry && isProcessAlive(entry.process)) {
             if (!options?.force) {
-                throw new Error(
-                    `[BotManager] Bot ${botId} 仍在运行，请先停止或设置 force=true`
-                );
+                throw new Error(`[BotManager] Bot ${botId} 仍在运行，请先停止或设置 force=true`);
             }
             // force=true 时自动停止进程
             await this.stopBot(botId);
@@ -569,14 +608,14 @@ export class BotManager {
             const mgr = this.configFactory.create<BotConfig>(ConfigType.BOT, botId);
             await mgr.delete();
         } catch (err) {
-            this.logger?.sysLog("warn", "BotManager", `删除配置文件失败 bot=${botId}: ${err}`);
+            this.logger?.sysLog('warn', 'BotManager', `删除配置文件失败 bot=${botId}: ${err}`);
         }
 
         // 确保内存条目已清理
         delete this.botProcesses[botId];
         delete this.internalData[botId];
 
-        this.logger?.sysLog("info", "BotManager", `Bot ${botId} 已删除`);
+        this.logger?.sysLog('info', 'BotManager', `Bot ${botId} 已删除`);
         return { success: true, message: `Bot ${botId} 已删除`, botId };
     }
 
@@ -598,9 +637,7 @@ export class BotManager {
      * 获取当前在线 Bot 数量（状态为 ONLINE）
      */
     getOnlineCount(): number {
-        return Object.values(this.botProcesses).filter(
-            e => e.status === BotStatus.ONLINE
-        ).length;
+        return Object.values(this.botProcesses).filter((e) => e.status === BotStatus.ONLINE).length;
     }
 
     /**

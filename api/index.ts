@@ -1,5 +1,5 @@
-import type { FastifyInstance } from "fastify";
-import apiRoutesGroup from "./routes/index.js";
+import type { FastifyInstance } from 'fastify';
+import apiRoutesGroup from './routes/index.js';
 
 /**
  * API 路由插件入口
@@ -12,5 +12,5 @@ import apiRoutesGroup from "./routes/index.js";
  * 旧路径通过 api/legacy/index.ts 提供 308 重定向。
  */
 export default async function apiRoutes(fastify: FastifyInstance): Promise<void> {
-  await fastify.register(apiRoutesGroup);
+    await fastify.register(apiRoutesGroup);
 }

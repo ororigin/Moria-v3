@@ -1,5 +1,5 @@
-import type { IConfigTemplate } from "../interfaces/IConfigTemplate.js";
-import type { BotConfig } from "../types/BotConfig.js";
+import type { IConfigTemplate } from '../interfaces/IConfigTemplate.js';
+import type { BotConfig } from '../types/BotConfig.js';
 
 /**
  * Bot 配置模板
@@ -7,32 +7,32 @@ import type { BotConfig } from "../types/BotConfig.js";
  * name 参数用于设置 botId 默认值
  */
 export class BotConfigTemplate implements IConfigTemplate<BotConfig> {
-  getSubDir(): string {
-    return "bot";
-  }
+    getSubDir(): string {
+        return 'bot';
+    }
 
-  getDefault(name: string): BotConfig {
-    const now = new Date().toISOString();
-    return {
-      // 属性
-      botId: name,
-      name: `Bot-${name}`,
-      host: "localhost",
-      server: "localhost",
-      port: 25565,
-      password: "12345678",
+    getDefault(name: string): BotConfig {
+        const now = new Date().toISOString();
+        return {
+            // 属性
+            botId: name,
+            name: `Bot-${name}`,
+            host: 'localhost',
+            server: 'localhost',
+            port: 25565,
+            password: '12345678',
 
-      // 重连
-      autoReconnect: true,
-      maxReconnect: 5,
-      reconnectInterval: 5000,
+            // 重连
+            autoReconnect: true,
+            maxReconnect: 5,
+            reconnectInterval: 5000,
 
-      // 配置
-      commandPrefix: "#",
+            // 配置
+            commandPrefix: '#',
 
-      // 时间戳 
-      createdAt: now,
-      updatedAt: now,
-    };
-  }
+            // 时间戳
+            createdAt: now,
+            updatedAt: now,
+        };
+    }
 }

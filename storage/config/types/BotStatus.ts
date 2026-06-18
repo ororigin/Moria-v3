@@ -11,8 +11,8 @@
  *   心跳超时   → ERROR（由心跳超时检测逻辑设置）
  */
 export enum BotStatus {
-  OFFLINE = "离线",
-  STARTING = "启动中",
-  ONLINE = "在线",
-  ERROR = "错误",
+    OFFLINE = '离线',
+    STARTING = '启动中',
+    ONLINE = '在线',
+    ERROR = '错误',
 }

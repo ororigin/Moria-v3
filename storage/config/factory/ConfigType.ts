@@ -5,8 +5,8 @@
  * 并在 ConfigManagerFactory.TEMPLATE_MAP 中注册对应的模板工厂
  */
 export enum ConfigType {
-  /** 系统级配置 */
-  SYSTEM = "system",
-  /** Bot 实例配置 */
-  BOT = "bot",
+    /** 系统级配置 */
+    SYSTEM = 'system',
+    /** Bot 实例配置 */
+    BOT = 'bot',
 }

@@ -1,7 +1,7 @@
 // archiver v8 类型声明（@types/archiver 仍为旧版 v5/v6 API）
-declare module "archiver" {
-    import { Transform, TransformOptions } from "stream";
-    import { ZlibOptions } from "zlib";
+declare module 'archiver' {
+    import { Transform, TransformOptions } from 'stream';
+    import { ZlibOptions } from 'zlib';
 
     interface ArchiverOptions {
         zlib?: ZlibOptions | undefined;
@@ -16,13 +16,13 @@ declare module "archiver" {
         date?: Date | string | undefined;
         mode?: number | undefined;
         prefix?: string | undefined;
-        stats?: import("fs").Stats | undefined;
+        stats?: import('fs').Stats | undefined;
     }
 
     class Archiver extends Transform {
         constructor(options?: ArchiverOptions);
         file(filename: string, data: EntryData): this;
-        append(source: import("stream").Readable | Buffer | string, data?: EntryData): this;
+        append(source: import('stream').Readable | Buffer | string, data?: EntryData): this;
         directory(dirpath: string, destpath: false | string): this;
         finalize(): Promise<void>;
         pointer(): number;

@@ -1,16 +1,16 @@
-import type { FastifyInstance } from "fastify";
-import createRoute from "./create.js";
-import listRoute from "./list.js";
-import infoRoute from "./info.js";
-import deleteRoute from "./delete.js";
-import onlineCountRoute from "./onlineCount.js";
-import totalCountRoute from "./totalCount.js";
-import startRoute from "./start.js";
-import stopRoute from "./stop.js";
-import commandRoute from "./command.js";
-import actionRoute from "./action.js";
-import logsRoute from "./logs.js";
-import chatsRoute from "./chats.js";
+import type { FastifyInstance } from 'fastify';
+import createRoute from './create.js';
+import listRoute from './list.js';
+import infoRoute from './info.js';
+import deleteRoute from './delete.js';
+import onlineCountRoute from './onlineCount.js';
+import totalCountRoute from './totalCount.js';
+import startRoute from './start.js';
+import stopRoute from './stop.js';
+import commandRoute from './command.js';
+import actionRoute from './action.js';
+import logsRoute from './logs.js';
+import chatsRoute from './chats.js';
 
 /**
  * Bot 管理路由插件入口
@@ -30,19 +30,19 @@ import chatsRoute from "./chats.js";
  *   DELETE /:id           → 删除 Bot
  */
 export default async function botRoutes(fastify: FastifyInstance): Promise<void> {
-  // ── 静态路由优先注册，避免被 /:id 参数路由误匹配 ──
-  await fastify.register(createRoute);
-  await fastify.register(listRoute);
-  await fastify.register(onlineCountRoute);
-  await fastify.register(totalCountRoute);
+    // ── 静态路由优先注册，避免被 /:id 参数路由误匹配 ──
+    await fastify.register(createRoute);
+    await fastify.register(listRoute);
+    await fastify.register(onlineCountRoute);
+    await fastify.register(totalCountRoute);
 
-  // ── 参数路由 ──
-  await fastify.register(infoRoute);
-  await fastify.register(logsRoute);
-  await fastify.register(chatsRoute);
-  await fastify.register(startRoute);
-  await fastify.register(stopRoute);
-  await fastify.register(commandRoute);
-  await fastify.register(actionRoute);
-  await fastify.register(deleteRoute);
+    // ── 参数路由 ──
+    await fastify.register(infoRoute);
+    await fastify.register(logsRoute);
+    await fastify.register(chatsRoute);
+    await fastify.register(startRoute);
+    await fastify.register(stopRoute);
+    await fastify.register(commandRoute);
+    await fastify.register(actionRoute);
+    await fastify.register(deleteRoute);
 }
