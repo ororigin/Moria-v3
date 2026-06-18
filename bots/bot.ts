@@ -127,7 +127,7 @@ async function main() {
    */
   function applyConfigPush(patch: Partial<BotRuntimeConfig>): void {
     Object.assign(cfg, patch);
-    sendOutput('log', { message: `配置已更新: ${Object.keys(patch).join(', ')}` });
+    sendOutput('log', { message: `配置已更新: ${Object.keys(patch).join(', ')}`, level: 'info' });
     // 发送确认
     sendOutput('config:update:ack', { config: patch });
   }
@@ -144,7 +144,7 @@ async function main() {
   }
 
   // 命令调度器
-  const dispatcher = new CommandDispatcher(context, (type) => sendOutput('log', { message: `WARN-${type}` }));
+  const dispatcher = new CommandDispatcher(context, (type) => sendOutput('log', { message: `WARN-${type}`, level: 'warn' }));
 
   // 解析器
   const resolver = new CommandResolver();
@@ -157,14 +157,18 @@ async function main() {
 
   // 日志与状态推送（供 BotManager 内部调用）
   const botManagerSendLog = (msg: string, isError = false) => {
-    sendOutput('log', { message: msg, error: isError });
+    sendOutput('log', { message: msg, level: isError ? 'error' : 'info' });
   };
   const botManagerSendStatus = (status: string) => {
     sendOutput('status', { status });
   };
+  // 聊天消息上报（供 BotManager 内部调用）
+  const botManagerSendChat = (message: string) => {
+    sendOutput('chat', { message });
+  };
 
   // 创建 BotManager
-  const botManager = new BotManager(cfg, dispatcher, onWhisper, botManagerSendLog, botManagerSendStatus);
+  const botManager = new BotManager(cfg, dispatcher, onWhisper, botManagerSendLog, botManagerSendStatus, botManagerSendChat);
 
   // 父进程存活检测
   const HEARTBEAT_TIMEOUT_MS = 16000;
@@ -182,7 +186,7 @@ async function main() {
     heartbeatTimeout = setTimeout(() => {
       sendOutput('log', {
         message: `心跳超时（${HEARTBEAT_TIMEOUT_MS / 1000}秒无响应），进程退出`,
-        error: true,
+        level: 'error',
       });
       botManager.shutdown();
     }, HEARTBEAT_TIMEOUT_MS);
@@ -196,7 +200,7 @@ async function main() {
     }
     // 处理关闭事件
     if (msg.type === 'internal:disconnect' || msg.type === 'internal:stdin_end') {
-      sendOutput('log', { message: '通信通道关闭，正在退出...' });
+      sendOutput('log', { message: '通信通道关闭，正在退出...', level: 'info' });
       clearHeartbeatTimeout();
       botManager.shutdown();
       return;
@@ -226,27 +230,27 @@ async function main() {
       if (result instanceof Command) {
         dispatcher.dispatch(result);
       } else if (result.type === 'privileged') {
-        sendOutput('log', { message: '收到停止命令，正在退出...' });
+        sendOutput('log', { message: '收到停止命令，正在退出...', level: 'info' });
         clearHeartbeatTimeout();
         botManager.shutdown();
       }
     } catch (e: any) {
       sendOutput('log', {
         message: `解析消息失败: ${e.message}`,
-        error: true,
+        level: 'error',
       });
     }
   });
 
   //系统信号处理
   process.on('SIGTERM', () => {
-    sendOutput('log', { message: '收到 SIGTERM 信号，正在退出...' });
+    sendOutput('log', { message: '收到 SIGTERM 信号，正在退出...', level: 'info' });
     clearHeartbeatTimeout();
     botManager.shutdown();
   });
 
   process.on('SIGINT', () => {
-    sendOutput('log', { message: '收到 SIGINT 信号，正在退出...' });
+    sendOutput('log', { message: '收到 SIGINT 信号，正在退出...', level: 'info' });
     clearHeartbeatTimeout();
     botManager.shutdown();
   });
@@ -261,7 +265,7 @@ async function main() {
 
   // 启动 
   botManager.start();
-  sendOutput('log', { message: `假人进程启动 - ${cfg.name} @ ${cfg.host}:${cfg.port} (configured=${configured})` });
+  sendOutput('log', { message: `假人进程启动 - ${cfg.name} @ ${cfg.host}:${cfg.port} (configured=${configured})`, level: 'info' });
   resetHeartbeatTimeout();
 }
 

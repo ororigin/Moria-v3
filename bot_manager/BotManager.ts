@@ -69,6 +69,19 @@ export class BotManager {
                 this.logger?.sysLog("error", "BotManager", `同步配置失败 bot=${msg.botId}: ${err}`);
             }
         });
+        // 聊天消息事件：子进程上报游戏内聊天 → 写入日志
+        this.messageBus.on("chat", (msg: C2MProcessTransportData & { message?: string }) => {
+            if (!msg.message) return;
+            this.logger?.log(msg.botId, "chat", msg.message);
+        });
+        // 日志事件：子进程上报运行日志 → 按 bot 分文件存储
+        this.messageBus.on("log", (msg: C2MProcessTransportData & { message?: string; level?: string }) => {
+            if (!msg.message) return;
+            this.logger?.log(msg.botId, "log", msg.message);
+            if (msg.level === "error" || msg.level === "warn") {
+                this.logger?.sysLog(msg.level as any, `Bot-${msg.botId}`, msg.message);
+            }
+        });
     }
 
     private botScriptPath: string;
