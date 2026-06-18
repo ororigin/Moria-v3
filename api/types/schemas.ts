@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// ─── 请求体验证 Schema ────────────────────────────────────────────────────
+// 请求体验证 Schema 
 
 /** POST /api/bots 请求体验证 */
 export const createBotSchema = z.object({
@@ -37,7 +37,7 @@ export const linesQuerySchema = z.object({
     .default(50),
 });
 
-// ─── Fastify JSON Schema（预计算，用于 Fastify schema 选项）────────────────
+// Fastify JSON Schema
 
 /** createBotSchema 的 JSON Schema 版本（Fastify schema.body 用） */
 export const createBotJSONSchema = z.toJSONSchema(createBotSchema);
@@ -48,7 +48,7 @@ export const sendCommandJSONSchema = z.toJSONSchema(sendCommandSchema);
 /** executeActionSchema 的 JSON Schema 版本 */
 export const executeActionJSONSchema = z.toJSONSchema(executeActionSchema);
 
-// ─── 推导类型 ─────────────────────────────────────────────────────────────
+// 推导类型
 
 export type CreateBotInput = z.input<typeof createBotSchema>;
 export type SendCommandInput = z.input<typeof sendCommandSchema>;

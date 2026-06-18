@@ -36,8 +36,7 @@ export class ConfigManagerFactory implements IConfigManagerFactory {
 
   constructor(private readonly configDir: string) {}
 
-  // ─── IConfigManagerFactory ─────────────────────────────────────────────────
-
+  // IConfigManagerFactory
   getConfigDir(): string {
     return this.configDir;
   }
@@ -83,7 +82,6 @@ export class ConfigManagerFactory implements IConfigManagerFactory {
     return new FileConfigManager<T>(this.configDir, name, template);
   }
 
-  // ─── Helpers ───────────────────────────────────────────────────────────────
 
   /**
    * 根据配置类型获取子目录名

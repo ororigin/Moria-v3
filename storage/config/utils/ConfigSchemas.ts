@@ -1,15 +1,14 @@
 import { z } from "zod";
 import { ConfigType } from "../factory/ConfigType.js";
 
-// ─── 时间戳格式 ──────────────────────────────────────────────────────────────
 
 /** ISO 8601 时间戳（如 "2026-06-17T12:00:00.000Z"） */
 const timestampSchema = z.string().datetime();
 
-// ─── BotConfig Schema ────────────────────────────────────────────────────────
 
+//假人
 export const botConfigSchema = z.object({
-  // ─── Identifiers ───
+  // 属性
   botId: z.string().uuid("botId 必须是有效的 UUID"),
   name: z.string().min(1, "name 不能为空"),
   host: z.string().min(1, "host 不能为空"),
@@ -17,26 +16,20 @@ export const botConfigSchema = z.object({
   port: z.number().int("port 必须是整数").min(1, "port 最小值为 1").max(65535, "port 最大值为 65535"),
   password: z.string(),
 
-  // ─── Reconnection Strategy ───
+  // 重连
   autoReconnect: z.boolean(),
   maxReconnect: z.number().int("maxReconnect 必须是整数").min(0, "maxReconnect 不能为负"),
   reconnectInterval: z.number().int("reconnectInterval 必须是整数").min(0, "reconnectInterval 不能为负"),
 
-  // ─── General Bot Info ───
-  displayName: z.string(),
-  token: z.string(),
+  // 配置
   commandPrefix: z.string(),
-  enabled: z.boolean(),
-  maxRetries: z.number().int("maxRetries 必须是整数").min(0, "maxRetries 不能为负"),
-  permissions: z.array(z.string(), "permissions 必须是字符串数组"),
-  webhookUrl: z.string().nullable(),
 
-  // ─── Timestamps ───
+  // 时间戳
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
 });
 
-// ─── SystemConfig Schema ─────────────────────────────────────────────────────
+//系统
 
 export const systemConfigSchema = z.object({
   version: z.string().min(1, "version 不能为空"),
@@ -47,13 +40,11 @@ export const systemConfigSchema = z.object({
   maintenanceMode: z.boolean(),
   allowedOrigins: z.array(z.string(), "allowedOrigins 必须是字符串数组"),
   port: z.number().int("port 必须是整数").min(1).max(65535),
-  // ─── Timestamps ───
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
 });
 
-// ─── Schema 注册表 ───────────────────────────────────────────────────────────
-// 与 ConfigManagerFactory.TEMPLATE_MAP 保持一致的注册模式
+// Schema 注册表
 
 export const SCHEMA_MAP: Record<ConfigType, () => z.ZodObject<any>> = {
   [ConfigType.SYSTEM]: () => systemConfigSchema,

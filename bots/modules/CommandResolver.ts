@@ -9,10 +9,16 @@ import {
 } from './commands/index.js';
 
 export class CommandResolver {
-  // 解析游戏内私聊（以 # 开头）
+  private commandPrefix: string;
+
+  constructor(commandPrefix: string = '!') {
+    this.commandPrefix = commandPrefix;
+  }
+
+  // 解析游戏内私聊
   resolveInGame(username: string, message: string): Command | null {
-    if (!message.startsWith('#')) return null;
-    const parts = message.slice(1).split(' ');
+    if (!message.startsWith(this.commandPrefix)) return null;
+    const parts = message.slice(this.commandPrefix.length).split(' ');
     const cmd = parts[0];
     const arg = parts.slice(1).join(' ');
 

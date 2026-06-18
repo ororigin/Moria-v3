@@ -60,7 +60,7 @@ async function main() {
     else {
       config = {
         ...(argvBotId ? { botId: argvBotId } : {}),
-        ...(argvName  ? { name: argvName, displayName: argvName } : {}),
+        ...(argvName  ? { name: argvName } : {}),
         ...(argvHost  ? { host: argvHost, server: argvHost } : {}),
         ...(!isNaN(argvPort) ? { port: argvPort } : {}),
         ...(argvPass  ? { password: argvPass } : {}),
@@ -87,13 +87,7 @@ async function main() {
     autoReconnect: config.autoReconnect ?? true,
     maxReconnect: config.maxReconnect ?? 5,
     reconnectInterval: config.reconnectInterval ?? 5000,
-    displayName: config.displayName ?? config.name ?? `Bot-${config.botId}`,
-    token: config.token ?? '',
     commandPrefix: config.commandPrefix ?? '!',
-    enabled: config.enabled ?? true,
-    maxRetries: config.maxRetries ?? 3,
-    permissions: config.permissions ?? ['read', 'write'],
-    webhookUrl: config.webhookUrl ?? null,
     createdAt: config.createdAt ?? new Date().toISOString(),
     updatedAt: config.updatedAt ?? new Date().toISOString(),
   };
@@ -147,7 +141,7 @@ async function main() {
   const dispatcher = new CommandDispatcher(context, (type) => sendOutput('log', { message: `WARN-${type}`, level: 'warn' }));
 
   // 解析器
-  const resolver = new CommandResolver();
+  const resolver = new CommandResolver(cfg.commandPrefix);
 
   // 游戏内私聊处理
   const onWhisper = (username: string, message: string) => {

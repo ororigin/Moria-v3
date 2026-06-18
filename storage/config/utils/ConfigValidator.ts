@@ -1,7 +1,7 @@
 import type { ConfigType } from "../factory/ConfigType.js";
 import { SCHEMA_MAP } from "./ConfigSchemas.js";
 
-// ─── 类型定义 ────────────────────────────────────────────────────────────────
+//类型定义
 
 export interface ValidationOptions {
   /**
@@ -32,7 +32,7 @@ export interface ValidationResult<T = unknown> {
   mode: "partial" | "strict";
 }
 
-// ─── 验证主函数 ──────────────────────────────────────────────────────────────
+// 验证主函数
 
 /**
  * 验证 JSON 字符串是否为指定配置类型的有效数据
@@ -59,7 +59,7 @@ export function validateConfig<T = unknown>(
   const mode = options?.mode ?? "partial";
   const allowUnknown = options?.allowUnknown ?? false;
 
-  // ── Step 1: 解析 JSON ──────────────────────────────────────────────────
+  // 解析 JSON
   let parsed: unknown;
   try {
     parsed = JSON.parse(jsonString);
@@ -73,7 +73,7 @@ export function validateConfig<T = unknown>(
     };
   }
 
-  // ── Step 2: 查找 Schema ────────────────────────────────────────────────
+  // 查找 Schema
   const schemaFactory = SCHEMA_MAP[type];
   if (!schemaFactory) {
     return {
@@ -85,7 +85,7 @@ export function validateConfig<T = unknown>(
     };
   }
 
-  // ── Step 3: 按模式调整 Schema ──────────────────────────────────────────
+  //按模式调整 Schema
   let schema = schemaFactory();
 
   if (mode === "partial") {
@@ -96,7 +96,7 @@ export function validateConfig<T = unknown>(
   // 未知字段处理
   schema = allowUnknown ? schema.passthrough() : schema.strict();
 
-  // ── Step 4: 执行验证 ───────────────────────────────────────────────────
+  //执行验证
   const result = schema.safeParse(parsed);
 
   if (result.success) {
@@ -109,7 +109,7 @@ export function validateConfig<T = unknown>(
     };
   }
 
-  // ── Step 5: 格式化错误信息 ─────────────────────────────────────────────
+  //格式化错误信息
   const errors = result.error.issues.map((issue) => {
     const path = issue.path.length > 0 ? issue.path.join(".") : "(root)";
     return `[${path}] ${issue.message}`;

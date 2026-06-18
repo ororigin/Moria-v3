@@ -13,27 +13,27 @@
  * ```
  */
 
-// ─── 基础接口 ────────────────────────────────────────────────────────────────
+// 基础接口
 export type { IConfig } from "./interfaces/IConfig.js";
 export type { IConfigManager } from "./interfaces/IConfigManager.js";
 export type { IConfigTemplate } from "./interfaces/IConfigTemplate.js";
 export type { IConfigManagerFactory } from "./interfaces/IConfigManagerFactory.js";
 
-// ─── 配置类型 ────────────────────────────────────────────────────────────────
+// 配置类型
 export type { BotConfig } from "./types/BotConfig.js";
 export type { SystemConfig } from "./types/SystemConfig.js";
 
-// ─── 配置模板 ────────────────────────────────────────────────────────────────
+// 配置模板
 export { BotConfigTemplate } from "./templates/BotConfigTemplate.js";
 export { SystemConfigTemplate } from "./templates/SystemConfigTemplate.js";
 
-// ─── 管理器 ──────────────────────────────────────────────────────────────────
+// 管理器
 export { FileConfigManager } from "./managers/FileConfigManager.js";
 
-// ─── 工厂 ────────────────────────────────────────────────────────────────────
+// 工厂
 export { ConfigManagerFactory } from "./factory/ConfigManagerFactory.js";
 export { ConfigType } from "./factory/ConfigType.js";
 
-// ─── 验证工具 ────────────────────────────────────────────────────────────────
+// 验证工具
 export { validateConfig } from "./utils/ConfigValidator.js";
 export type { ValidationOptions, ValidationResult } from "./utils/ConfigValidator.js";

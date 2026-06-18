@@ -31,19 +31,7 @@ export interface BotConfig extends IConfig {
   /** 重连间隔（毫秒） */
   reconnectInterval: number;
 
-  // ─── 通用 Bot 信息 ────────────────────────────────────────────────────────
-  /** 显示名称 */
-  displayName: string;
-  /** 认证 Token */
-  token: string;
+  // ─── 通用配置 ─────────────────────────────────────────────────────────────
   /** 命令前缀 */
   commandPrefix: string;
-  /** 是否启用 */
-  enabled: boolean;
-  /** 最大重试次数 */
-  maxRetries: number;
-  /** 权限列表 */
-  permissions: string[];
-  /** Webhook URL */
-  webhookUrl: string | null;
 }

@@ -5,7 +5,7 @@
  * 使用 success() / error() 工厂函数构建响应。
  */
 
-// ─── 成功响应 ────────────────────────────────────────────────────────────
+//成功响应
 
 export interface ApiSuccess<T = unknown> {
   success: true;
@@ -13,7 +13,7 @@ export interface ApiSuccess<T = unknown> {
   timestamp: string;
 }
 
-// ─── 错误响应 ────────────────────────────────────────────────────────────
+//错误响应
 
 export interface ApiError {
   success: false;
@@ -26,11 +26,11 @@ export interface ApiError {
   timestamp: string;
 }
 
-// ─── 联合类型 ────────────────────────────────────────────────────────────
+//联合类型
 
 export type ApiResponse<T = unknown> = ApiSuccess<T> | ApiError;
 
-// ─── 工厂函数 ────────────────────────────────────────────────────────────
+// 工厂函数
 
 /** 构造成功响应 */
 export function success<T>(data: T): ApiSuccess<T> {

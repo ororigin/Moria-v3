@@ -17,14 +17,8 @@ export interface BotRuntimeConfig {
   maxReconnect: number;
   reconnectInterval: number;
 
-  // ─── 通用 Bot 信息 ────────────────────────────────────────────────────────
-  displayName: string;
-  token: string;
+  // ─── 通用配置 ─────────────────────────────────────────────────────────────
   commandPrefix: string;
-  enabled: boolean;
-  maxRetries: number;
-  permissions: string[];
-  webhookUrl: string | null;
 
   // ─── 时间戳（由配置管理器维护） ──────────────────────────────────────────
   createdAt: string;
