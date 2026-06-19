@@ -7,6 +7,7 @@ import {
     UseCommandCommand,
     HelpCommand,
     AttackCommand,
+    LookAtBlockCommand,
 } from './commands/index.js';
 
 export class CommandResolver {
@@ -38,6 +39,8 @@ export class CommandResolver {
                 return new HelpCommand(username, arg);
             case 'attack':
                 return new AttackCommand(username, arg);
+            case 'lookat':
+                return new LookAtBlockCommand(username, arg);
             case 'taskkill':
                 return new TerminateCommand(username);
             default:
