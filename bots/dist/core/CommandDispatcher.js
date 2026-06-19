@@ -1,4 +1,4 @@
-import { CommandHandler } from '../modules/Commands.js';
+import { CommandHandler } from "../modules/Commands.js";
 export class CommandDispatcher {
     handler;
     constructor(context, warningHandler) {
@@ -8,6 +8,7 @@ export class CommandDispatcher {
         this.handler.addCommand(command);
     }
     abortAllAndClear() {
+        // 清空命令
         this.handler.abortCurrentAndClear();
     }
 }

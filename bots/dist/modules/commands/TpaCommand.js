@@ -1,4 +1,4 @@
-//请求传送模块
+// 请求传送模块
 import { Command } from '../Commands.js';
 export class TpaCommand extends Command {
     target;

@@ -1,4 +1,4 @@
-//乘坐模块
+// 乘坐模块
 import { Command } from '../Commands.js';
 export class MountMinecartCommand extends Command {
     async exec(context) {

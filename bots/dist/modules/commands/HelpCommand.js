@@ -1,5 +1,5 @@
-//发送帮助信息
-import { CommandInfo } from "./index.js";
+// 发送帮助信息
+import { CommandInfo } from './index.js';
 import { Command } from '../Commands.js';
 export class HelpCommand extends Command {
     target;
@@ -11,12 +11,12 @@ export class HelpCommand extends Command {
     }
     async exec(context) {
         const bot = context.getBot();
-        if (this.arg == "") {
+        if (this.arg == '') {
             bot.chat(`/w ${this.target} 可用命令: ${Object.keys(CommandInfo.descriptions)}`);
         }
         else {
             if (CommandInfo.descriptions[this.arg]) {
-                bot.chat(`/w ${this.target} ${CommandInfo.descriptions[this.arg]["description"]}；${CommandInfo.descriptions[this.arg]["usage"]}`);
+                bot.chat(`/w ${this.target} ${CommandInfo.descriptions[this.arg]['description']}；${CommandInfo.descriptions[this.arg]['usage']}`);
             }
             else {
                 bot.chat(`/w ${this.target} 可用命令: ${Object.keys(CommandInfo.descriptions)}`);

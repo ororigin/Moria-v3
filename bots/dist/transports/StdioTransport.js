@@ -11,15 +11,15 @@ export class StdioTransport {
                     continue;
                 try {
                     const obj = JSON.parse(line);
-                    this.messageCallbacks.forEach(cb => cb(obj));
+                    this.messageCallbacks.forEach((cb) => cb(obj));
                 }
                 catch (e) {
-                    this.messageCallbacks.forEach(cb => cb({ error: `解析 stdin 失败: ${e.message}`, raw: line }));
+                    this.messageCallbacks.forEach((cb) => cb({ error: `解析 stdin 失败: ${e.message}`, raw: line }));
                 }
             }
         });
         process.stdin.on('end', () => {
-            this.messageCallbacks.forEach(cb => cb({ type: 'internal:stdin_end' }));
+            this.messageCallbacks.forEach((cb) => cb({ type: 'internal:stdin_end' }));
         });
     }
     send(data) {

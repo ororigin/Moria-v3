@@ -4,6 +4,7 @@ export { MountMinecartCommand } from './MountMinecartCommand.js';
 export { DismountCommand } from './DismountCommand.js';
 export { UseCommandCommand } from './UseCommandCommand.js';
 export { HelpCommand } from './HelpCommand.js';
+export { AttackCommand } from './AttackCommand.js';
 interface CommandInfoDTO {
     [key: string]: CommandDescriptionDTO;
 }
@@ -21,6 +22,10 @@ export class CommandInfo {
         usecommand: {
             usage: '使用方法:#usecommand [需要发送的命令，不需要加入斜杠(STR)]',
             description: '发送命令',
+        },
+        attack: {
+            usage: '使用方法:#attack [频率(tick)]',
+            description: '沿视线循环攻击，频率=每次攻击间隔的tick数(1tick=1/20秒)，默认10tick',
         },
     };
 }

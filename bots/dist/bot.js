@@ -3,8 +3,8 @@ import { CommandDispatcher } from './core/CommandDispatcher.js';
 import { CommandResolver } from './modules/CommandResolver.js';
 import { Command } from './modules/Commands.js';
 import { createTransport } from './transports/createTransport.js';
-import { isM2CProcessTransportData } from './type/transport.js';
-// ─── 配置初始化 ───────────────────────────────────────────────────────────────
+import { isM2CProcessTransportData, } from './type/transport.js';
+// 配置初始化
 // 支持以下方式获取配置（按优先级）：
 //   1) argv 提供完整连接参数: node bot.js <botId> <name> <host> <port> [password]
 //   2) 父进程 IPC 发送 { type: 'init', config: { ... } }
@@ -22,7 +22,7 @@ async function main() {
     let config = null;
     /** 是否拥有完整配置（来自 IPC init） */
     let configured = false;
-    //argv 提供完整连接参数 
+    // argv 提供完整连接参数
     if (argvBotId && argvName && argvHost && !isNaN(argvPort)) {
         config = {
             botId: argvBotId,
@@ -50,11 +50,11 @@ async function main() {
         if (config) {
             configured = true;
         }
-        //IPC 超时
+        // IPC 超时
         else {
             config = {
                 ...(argvBotId ? { botId: argvBotId } : {}),
-                ...(argvName ? { name: argvName, displayName: argvName } : {}),
+                ...(argvName ? { name: argvName } : {}),
                 ...(argvHost ? { host: argvHost, server: argvHost } : {}),
                 ...(!isNaN(argvPort) ? { port: argvPort } : {}),
                 ...(argvPass ? { password: argvPass } : {}),
@@ -70,7 +70,7 @@ async function main() {
             }
         }
     }
-    //规范化并填充全部默认值
+    // 规范化并填充全部默认值
     const cfg = {
         botId: config.botId ?? '',
         name: config.name ?? '',
@@ -81,13 +81,7 @@ async function main() {
         autoReconnect: config.autoReconnect ?? true,
         maxReconnect: config.maxReconnect ?? 5,
         reconnectInterval: config.reconnectInterval ?? 5000,
-        displayName: config.displayName ?? config.name ?? `Bot-${config.botId}`,
-        token: config.token ?? '',
         commandPrefix: config.commandPrefix ?? '!',
-        enabled: config.enabled ?? true,
-        maxRetries: config.maxRetries ?? 3,
-        permissions: config.permissions ?? ['read', 'write'],
-        webhookUrl: config.webhookUrl ?? null,
         createdAt: config.createdAt ?? new Date().toISOString(),
         updatedAt: config.updatedAt ?? new Date().toISOString(),
     };
@@ -103,7 +97,7 @@ async function main() {
     };
     // 初始化传输层
     const transport = createTransport();
-    // ─── 配置同步辅助函数 ─────────────────────────────────────────────────────
+    // 配置同步辅助函数
     /**
      * 向父进程上报配置变更
      * @param patch  发生变更的配置字段
@@ -117,7 +111,10 @@ async function main() {
      */
     function applyConfigPush(patch) {
         Object.assign(cfg, patch);
-        sendOutput('log', { message: `配置已更新: ${Object.keys(patch).join(', ')}`, level: 'info' });
+        sendOutput('log', {
+            message: `配置已更新: ${Object.keys(patch).join(', ')}`,
+            level: 'info',
+        });
         // 发送确认
         sendOutput('config:update:ack', { config: patch });
     }
@@ -134,7 +131,7 @@ async function main() {
     // 命令调度器
     const dispatcher = new CommandDispatcher(context, (type) => sendOutput('log', { message: `WARN-${type}`, level: 'warn' }));
     // 解析器
-    const resolver = new CommandResolver();
+    const resolver = new CommandResolver(cfg.commandPrefix);
     // 游戏内私聊处理
     const onWhisper = (username, message) => {
         const cmd = resolver.resolveInGame(username, message);
@@ -175,7 +172,7 @@ async function main() {
     }
     // 注册消息处理
     transport.onMessage((msg) => {
-        //只处理符合 M2CProcessTransportData 的消息
+        // 只处理符合 M2CProcessTransportData 的消息
         if (!isM2CProcessTransportData(msg)) {
             return;
         }
@@ -187,9 +184,9 @@ async function main() {
             return;
         }
         resetHeartbeatTimeout();
-        //处理内部事件
+        // 处理内部事件
         switch (msg.type) {
-            //获取pid
+            // 获取 pid
             case 'internal:pid':
                 sendOutput('internal', { internalType: 'pid', message: { pid: process.pid } });
                 return;
@@ -224,7 +221,7 @@ async function main() {
             });
         }
     });
-    //系统信号处理
+    // 系统信号处理
     process.on('SIGTERM', () => {
         sendOutput('log', { message: '收到 SIGTERM 信号，正在退出...', level: 'info' });
         clearHeartbeatTimeout();
@@ -241,9 +238,12 @@ async function main() {
     }, 8000);
     // 上报配置状态
     sendOutput('status', { status: 'starting', configured });
-    // 启动 
+    // 启动
     botManager.start();
-    sendOutput('log', { message: `假人进程启动 - ${cfg.name} @ ${cfg.host}:${cfg.port} (configured=${configured})`, level: 'info' });
+    sendOutput('log', {
+        message: `假人进程启动 - ${cfg.name} @ ${cfg.host}:${cfg.port} (configured=${configured})`,
+        level: 'info',
+    });
     resetHeartbeatTimeout();
 }
 // 启动主流程

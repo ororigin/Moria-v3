@@ -1,4 +1,4 @@
-//聊天模块
+// 聊天模块
 import { Command } from '../Commands.js';
 export class SayCommand extends Command {
     _sender;

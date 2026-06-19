@@ -33,7 +33,7 @@ export class CommandHandler {
         }
         if (this.isBlocked) {
             this.onWarning(0);
-            if (command.sender && command.sender != "") {
+            if (command.sender && command.sender != '') {
                 this.context.bot?.chat(`/w ${command.sender} 假人目前正在工作，所以这个命令被忽略了喵。请使用#taskkill结束目前任务再发送命令哦`);
             }
             return;
@@ -46,7 +46,7 @@ export class CommandHandler {
     terminate(command) {
         if (!this.isBlocked || !this.currentAbortController) {
             this.onWarning(1);
-            if (command.sender && command.sender != "") {
+            if (command.sender && command.sender != '') {
                 this.context.bot?.chat(`/w ${command.sender} 目前假人没有在做任何事情，不需要结束任务喵`);
             }
             return;

@@ -1,11 +1,15 @@
 import { TerminateCommand } from './Commands.js';
-import { SayCommand, TpaCommand, MountMinecartCommand, DismountCommand, UseCommandCommand, HelpCommand, } from './commands/index.js';
+import { SayCommand, TpaCommand, MountMinecartCommand, DismountCommand, UseCommandCommand, HelpCommand, AttackCommand, } from './commands/index.js';
 export class CommandResolver {
-    // 解析游戏内私聊（以 # 开头）
+    commandPrefix;
+    constructor(commandPrefix = '!') {
+        this.commandPrefix = commandPrefix;
+    }
+    // 解析游戏内私聊
     resolveInGame(username, message) {
-        if (!message.startsWith('#'))
+        if (!message.startsWith(this.commandPrefix))
             return null;
-        const parts = message.slice(1).split(' ');
+        const parts = message.slice(this.commandPrefix.length).split(' ');
         const cmd = parts[0];
         const arg = parts.slice(1).join(' ');
         switch (cmd) {
@@ -21,6 +25,8 @@ export class CommandResolver {
                 return new UseCommandCommand(username, arg);
             case 'help':
                 return new HelpCommand(username, arg);
+            case 'attack':
+                return new AttackCommand(username, arg);
             case 'taskkill':
                 return new TerminateCommand(username);
             default:
@@ -32,13 +38,13 @@ export class CommandResolver {
         switch (json.type) {
             case 'chat':
                 if (json.msg)
-                    return new SayCommand("", json.msg);
+                    return new SayCommand('', json.msg);
                 return null;
             case 'action':
                 if (json.index === '1')
-                    return new MountMinecartCommand("");
+                    return new MountMinecartCommand('');
                 if (json.index === '2')
-                    return new DismountCommand("");
+                    return new DismountCommand('');
                 return null;
             case 'stop':
                 return {

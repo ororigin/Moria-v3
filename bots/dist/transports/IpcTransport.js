@@ -6,7 +6,7 @@ export class IpcTransport {
     }
     send(data) {
         if (process.send) {
-            process.send(JSON.stringify(data));
+            process.send(data);
         }
     }
     onMessage(callback) {

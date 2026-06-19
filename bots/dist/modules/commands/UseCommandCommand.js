@@ -1,4 +1,4 @@
-//使用命令模块
+// 使用命令模块
 import { Command } from '../Commands.js';
 export class UseCommandCommand extends Command {
     _sender;

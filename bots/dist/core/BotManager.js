@@ -19,11 +19,15 @@ export class BotManager {
         this.sendLog = sendLog;
         this.sendStatus = sendStatus;
         this.onChat = onChat;
-        this.context = { bot: null, config, getBot() {
+        this.context = {
+            bot: null,
+            config,
+            getBot() {
                 if (!this.bot)
                     throw new Error('Context not fully initialized');
                 return this.bot;
-            }, };
+            },
+        };
     }
     async start() {
         this.createBot();

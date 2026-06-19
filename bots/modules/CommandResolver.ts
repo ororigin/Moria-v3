@@ -6,6 +6,7 @@ import {
     DismountCommand,
     UseCommandCommand,
     HelpCommand,
+    AttackCommand,
 } from './commands/index.js';
 
 export class CommandResolver {
@@ -35,6 +36,8 @@ export class CommandResolver {
                 return new UseCommandCommand(username, arg);
             case 'help':
                 return new HelpCommand(username, arg);
+            case 'attack':
+                return new AttackCommand(username, arg);
             case 'taskkill':
                 return new TerminateCommand(username);
             default:
