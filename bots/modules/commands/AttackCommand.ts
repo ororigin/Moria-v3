@@ -1,8 +1,8 @@
 import { PersistentCommand } from '../Commands.js';
 import type { IContext } from '../../utils/IContext.js';
 import type { Bot } from 'mineflayer';
-import { Block } from 'prismarine-block'
-import { Entity } from 'prismarine-entity'
+import { Block } from 'prismarine-block';
+import { Entity } from 'prismarine-entity';
 import { Vec3 } from 'vec3';
 
 export class AttackCommand extends PersistentCommand {
@@ -43,7 +43,7 @@ export class AttackCommand extends PersistentCommand {
      */
     pickTargetEntity(bot: Bot): Entity | null {
         const entityInteractionRange = 3.0; // ENTITY_INTERACTION_RANGE 属性默认值
-        const blockInteractionRange = 4.5;  // BLOCK_INTERACTION_RANGE 属性默认值
+        const blockInteractionRange = 4.5; // BLOCK_INTERACTION_RANGE 属性默认值
         const maxDistance = Math.max(blockInteractionRange, entityInteractionRange);
 
         const eyePos = this.getEyePosition(bot);
@@ -64,12 +64,7 @@ export class AttackCommand extends PersistentCommand {
         // 构建搜索 AABB
         const searchDist = Math.sqrt(blockHitDistSq);
         const searchEnd = eyePos.plus(lookDir.scale(searchDist));
-        const searchBox = this.expandAABB(
-            bot.entity.position,
-            lookDir,
-            searchDist,
-            1.0
-        );
+        const searchBox = this.expandAABB(bot.entity.position, lookDir, searchDist, 1.0);
         // 实体射线检测
         let closestEntity: Entity | null = null;
         let closestDistSq = blockHitDistSq; // 不能比方块更远
@@ -121,7 +116,7 @@ export class AttackCommand extends PersistentCommand {
         return new Vec3(
             -Math.sin(yawRad) * Math.cos(pitchRad),
             -Math.sin(pitchRad),
-             Math.cos(yawRad) * Math.cos(pitchRad),
+            Math.cos(yawRad) * Math.cos(pitchRad),
         );
     }
 
@@ -202,11 +197,7 @@ export class AttackCommand extends PersistentCommand {
      *
      * @returns 从射线起点到命中点的距离平方，若无交点返回 null
      */
-    private rayAABBIntersect(
-        from: Vec3,
-        to: Vec3,
-        bb: { min: Vec3; max: Vec3 },
-    ): number | null {
+    private rayAABBIntersect(from: Vec3, to: Vec3, bb: { min: Vec3; max: Vec3 }): number | null {
         const dirX = to.x - from.x;
         const dirY = to.y - from.y;
         const dirZ = to.z - from.z;

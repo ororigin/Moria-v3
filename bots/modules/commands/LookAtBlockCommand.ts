@@ -3,7 +3,6 @@ import type { IContext } from '../../utils/IContext.js';
 import { Vec3 } from 'vec3';
 
 export class LookAtBlockCommand extends Command {
-
     constructor(
         sender: string,
         private target: string,

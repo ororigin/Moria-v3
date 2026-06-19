@@ -1,13 +1,16 @@
-import { exec, type ChildProcess } from 'child_process';
-import { promisify } from 'util';
-import os from 'os';
+import { exec, type ChildProcess } from "child_process";
+import { promisify } from "util";
+import os from "os";
 
 const execPromise = promisify(exec);
 
 /**
  * 以 setImmediate 轮询等待子进程退出，最多等待 timeoutMs 毫秒
  */
-export function waitForExit(child: ChildProcess, timeoutMs: number): Promise<void> {
+export function waitForExit(
+    child: ChildProcess,
+    timeoutMs: number,
+): Promise<void> {
     return new Promise<void>((resolve) => {
         const deadline = Date.now() + timeoutMs;
         const poll = () => {
@@ -28,7 +31,9 @@ export function waitForExit(child: ChildProcess, timeoutMs: number): Promise<voi
 /**
  * 判断子进程是否仍在运行（同时也是 ChildProcess 的类型守卫）
  */
-export function isProcessAlive(child: ChildProcess | null | undefined): child is ChildProcess {
+export function isProcessAlive(
+    child: ChildProcess | null | undefined,
+): child is ChildProcess {
     return !!child && !child.killed && child.exitCode === null;
 }
 
@@ -47,7 +52,7 @@ export async function forceKillProcess(
 
     // 1. SIGTERM
     try {
-        child.kill('SIGTERM');
+        child.kill("SIGTERM");
     } catch {
         // Windows 上忽略信号错误
     }
@@ -58,7 +63,7 @@ export async function forceKillProcess(
     // 3. 若仍未退出则强杀
     if (!isProcessAlive(child)) return;
 
-    if (os.platform() === 'win32') {
+    if (os.platform() === "win32") {
         try {
             await execPromise(`taskkill /F /T /PID ${pid}`);
         } catch {
@@ -66,7 +71,7 @@ export async function forceKillProcess(
         }
     } else {
         try {
-            child.kill('SIGKILL');
+            child.kill("SIGKILL");
         } catch {
             // 忽略错误
         }
