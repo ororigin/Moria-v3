@@ -1,3 +1,4 @@
+//攻击模块
 import { PersistentCommand } from '../Commands.js';
 import type { IContext } from '../../utils/IContext.js';
 import type { Bot } from 'mineflayer';
