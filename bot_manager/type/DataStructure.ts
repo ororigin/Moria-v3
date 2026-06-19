@@ -1,6 +1,6 @@
-import type { ChildProcess } from 'child_process';
-import type { BotStatus } from '../../storage/config/types/BotStatus.js';
-import type { BotConfig } from '../../storage/config/types/BotConfig.js';
+import type { ChildProcess } from "child_process";
+import type { BotStatus } from "../../storage/config/types/BotStatus.js";
+import type { BotConfig } from "../../storage/config/types/BotConfig.js";
 
 /** 子进程管理条目（运行时状态，不持久化） */
 export interface BotProcessEntry {
