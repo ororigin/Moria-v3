@@ -6,6 +6,7 @@ export { UseCommandCommand } from './UseCommandCommand.js';
 export { HelpCommand } from './HelpCommand.js';
 export { AttackCommand } from './AttackCommand.js';
 export { LookAtBlockCommand } from './LookAtBlockCommand.js';
+export { PlaceBlockCommand } from './PlaceBlockCommand.js';
 interface CommandInfoDTO {
     [key: string]: CommandDescriptionDTO;
 }
@@ -31,6 +32,10 @@ export class CommandInfo {
         lookat: {
             usage: '使用方法:#lookat <x> <y> <z>',
             description: '让假人视线看向指定坐标的方块',
+        },
+        placeblock: {
+            usage: '使用方法:#placeblock <放置间隔(单位:gt)>',
+            description: '根据指定频率沿视线循环放置当前手持方块，默认间隔5tick',
         },
     };
 }
