@@ -43,7 +43,39 @@ export const executeActionJSONSchema = z.toJSONSchema(executeActionSchema);
 
 // 推导类型
 
+/** PATCH /api/bots/:id/config 请求体验证（部分更新，不包含不可变字段） */
+export const updateBotConfigSchema = z.object({
+    name: z.string().min(1, 'name 不能为空').optional(),
+    host: z.string().min(1, 'host 不能为空').optional(),
+    server: z.string().min(1, 'server 不能为空').optional(),
+    port: z
+        .number()
+        .int('port 必须是整数')
+        .min(1, 'port 最小值为 1')
+        .max(65535, 'port 最大值为 65535')
+        .optional(),
+    password: z.string().optional(),
+    autoReconnect: z.boolean().optional(),
+    maxReconnect: z
+        .number()
+        .int('maxReconnect 必须是整数')
+        .min(0, 'maxReconnect 不能为负')
+        .optional(),
+    reconnectInterval: z
+        .number()
+        .int('reconnectInterval 必须是整数')
+        .min(0, 'reconnectInterval 不能为负')
+        .optional(),
+    commandPrefix: z.string().optional(),
+});
+
+/** updateBotConfigSchema 的 JSON Schema 版本 */
+export const updateBotConfigJSONSchema = z.toJSONSchema(updateBotConfigSchema);
+
+// 推导类型
+
 export type CreateBotInput = z.input<typeof createBotSchema>;
 export type SendCommandInput = z.input<typeof sendCommandSchema>;
 export type ExecuteActionInput = z.input<typeof executeActionSchema>;
 export type LinesQueryInput = z.output<typeof linesQuerySchema>;
+export type UpdateBotConfigInput = z.input<typeof updateBotConfigSchema>;

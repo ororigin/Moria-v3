@@ -10,6 +10,7 @@ import stopRoute from './stop.js';
 import commandRoute from './command.js';
 import actionRoute from './action.js';
 import actionsRoute from './actions.js';
+import configRoute from './config.js';
 import logsRoute from './logs.js';
 import chatsRoute from './chats.js';
 
@@ -23,6 +24,8 @@ import chatsRoute from './chats.js';
  *   GET    /online-count  → 在线 Bot 数
  *   GET    /total-count   → Bot 总数
  *   GET    /:id           → 单个 Bot 信息
+ *   GET    /:id/config    → Bot 完整配置
+ *   PATCH  /:id/config    → 更新 Bot 配置
  *   GET    /:id/logs      → Bot 日志
  *   GET    /:id/chats     → Bot 聊天记录
  *   POST   /:id/start     → 启动 Bot
@@ -41,6 +44,7 @@ export default async function botRoutes(fastify: FastifyInstance): Promise<void>
 
     // ── 参数路由 ──
     await fastify.register(infoRoute);
+    await fastify.register(configRoute);
     await fastify.register(logsRoute);
     await fastify.register(chatsRoute);
     await fastify.register(startRoute);

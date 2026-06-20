@@ -162,6 +162,8 @@ GET /api/system/info
 | `GET`    | `/api/bots/online-count`| 获取在线 Bot 数量                 |
 | `GET`    | `/api/bots/total-count` | 获取 Bot 总数                     |
 | `GET`    | `/api/bots/:id`         | 获取单个 Bot 信息                 |
+| `GET`    | `/api/bots/:id/config`  | 获取 Bot 完整配置（不含 password）|
+| `PATCH`  | `/api/bots/:id/config`  | 部分更新 Bot 配置                 |
 | `GET`    | `/api/bots/:id/logs`    | 获取 Bot 日志                     |
 | `GET`    | `/api/bots/:id/chats`   | 获取 Bot 聊天记录                 |
 | `POST`   | `/api/bots/:id/start`   | 启动 Bot                          |
@@ -216,6 +218,69 @@ GET /api/bots/actions
 ```
 
 > 主进程会缓存查询结果，需要时可通过重启或清除缓存后重新获取。
+
+### Bot 配置同步
+
+`GET /api/bots/:id/config` 和 `PATCH /api/bots/:id/config` 两个端点用于前端获取和修改 Bot 配置，实现配置的同步管理。
+
+#### 获取配置
+
+```
+GET /api/bots/:id/config
+```
+
+返回完整配置，但**不会包含 `password` 字段**。响应示例：
+
+```json
+{
+  "success": true,
+  "data": {
+    "botId": "uuid-xxxx",
+    "name": "MyBot",
+    "host": "localhost",
+    "server": "localhost",
+    "port": 25565,
+    "autoReconnect": true,
+    "maxReconnect": 5,
+    "reconnectInterval": 5000,
+    "commandPrefix": "#",
+    "createdAt": "2026-06-20T12:00:00.000Z",
+    "updatedAt": "2026-06-20T12:00:00.000Z"
+  }
+}
+```
+
+#### 更新配置
+
+```
+PATCH /api/bots/:id/config
+Content-Type: application/json
+
+{
+  "commandPrefix": "!",
+  "autoReconnect": false
+}
+```
+
+支持**部分更新**（PATCH 语义），只发送需要修改的字段即可。不可变字段（`botId`、`createdAt`、`updatedAt`）无法通过此接口修改。更新操作会同步完成以下动作：
+
+1. **写入本地配置文件** — 持久化到 `configs/bot/<botId>_config.json`
+2. **IPC 推送** — 如果 Bot 正在运行，通过 `config:push` 消息实时推送给 Bot 子进程
+
+响应返回更新后的完整配置（不含 password）：
+
+```json
+{
+  "success": true,
+  "data": {
+    "botId": "uuid-xxxx",
+    "name": "MyBot",
+    "commandPrefix": "!",
+    "autoReconnect": false,
+    ...
+  }
+}
+```
 
 ### 旧路径兼容
 
@@ -323,6 +388,7 @@ static paramsTemplate = [
 | `init`                   | 父→子      | 初始化配置下发                          |
 | `action`                 | 父→子      | 执行预设动作（含结构化 params）         |
 | `internal:actionSchemas` | 父→子      | 查询已注册的 action 参数模板            |
+| `config:push`            | 父→子      | 主动推送配置更新                        |
 | `config:update`          | 子→父      | 配置变更上报                            |
 | `chat`                   | 子→父      | 游戏内聊天消息上报                      |
 | `log`                    | 子→父      | 运行日志上报                            |
@@ -363,6 +429,7 @@ Moria-v3/
 │   │       ├── start.ts        #     POST /:id/start
 │   │       ├── stop.ts         #     POST /:id/stop
 │   │       ├── command.ts      #     POST /:id/command
+│   │       ├── config.ts       #     GET/PATCH /:id/config
 │   │       ├── delete.ts       #     DELETE /:id
 │   │       ├── logs.ts         #     GET /:id/logs
 │   │       ├── chats.ts        #     GET /:id/chats
