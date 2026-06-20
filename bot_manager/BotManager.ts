@@ -7,6 +7,7 @@ import type {
     C2MProcessTransportData,
     M2CProcessTransportData,
     InternalData,
+    ActionDescriptor,
 } from "../type/transport.js";
 import {
     isM2CProcessTransportData,
@@ -33,6 +34,8 @@ export class BotManager {
         [botId: string]: { [messageType: string]: C2MProcessTransportData };
     } = {}; // 根据 botId 和 messageType 索引的容器
     private heartbeatMonitorTimer: ReturnType<typeof setInterval> | null = null;
+    /** 缓存的 action 描述符（从 bot 子进程获取） */
+    private cachedActionDescriptors: ActionDescriptor[] | null = null;
     logger!: Logger;
     registerMessageBus() {
         // 心跳事件：记录最后心跳时间、同步 PID、重置失跳计数、回复确认
@@ -298,6 +301,71 @@ export class BotManager {
         } catch {
             // 超时或进程异常退出，返回 -1
             return -1;
+        }
+    }
+
+    /**
+     * 获取所有已注册 action 命令的参数模板描述符
+     *
+     * 首次调用时会向任意在线 bot 发送 IPC 请求获取，结果缓存在内存中。
+     * 缓存可通过将 cachedActionDescriptors 置为 null 来清除后重新获取。
+     *
+     * @param timeoutMs  等待 bot 响应的超时时间（毫秒），默认 5000ms
+     * @returns ActionDescriptor[] — 若无任何在线 bot 则返回空数组
+     */
+    async getActionDescriptors(timeoutMs: number = 5000): Promise<ActionDescriptor[]> {
+        if (this.cachedActionDescriptors) {
+            return this.cachedActionDescriptors;
+        }
+
+        // 找一个在线 bot 来查询
+        const onlineEntry = Object.entries(this.botProcesses).find(
+            ([, entry]) => isProcessAlive(entry.process),
+        );
+        if (!onlineEntry) {
+            return [];
+        }
+        const [botId, entry] = onlineEntry;
+
+        // 发送查询请求
+        entry.process.send({ type: "internal:actionSchemas" });
+
+        try {
+            const schemas = await new Promise<ActionDescriptor[]>((resolve, reject) => {
+                const start = Date.now();
+
+                const check = () => {
+                    const msg = this.internalData[botId]?.actionSchemas;
+                    if (
+                        msg &&
+                        msg.message &&
+                        Array.isArray((msg.message as any).schemas)
+                    ) {
+                        const result = (msg.message as any).schemas as ActionDescriptor[];
+                        // 清理临时数据
+                        if (this.internalData[botId]?.actionSchemas) {
+                            delete this.internalData[botId]!.actionSchemas;
+                        }
+                        resolve(result);
+                        return;
+                    }
+                    if (Date.now() - start >= timeoutMs) {
+                        reject(new Error("timeout"));
+                        return;
+                    }
+                    if (entry.process.killed || entry.process.exitCode !== null) {
+                        reject(new Error("process exited"));
+                        return;
+                    }
+                    setImmediate(check);
+                };
+                check();
+            });
+
+            this.cachedActionDescriptors = schemas;
+            return schemas;
+        } catch {
+            return [];
         }
     }
 

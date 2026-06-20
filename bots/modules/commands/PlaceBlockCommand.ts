@@ -18,7 +18,6 @@ const REPLACEABLE_BLOCK_NAMES = new Set<string>([
     'grass',
 ]);
 
-
 //判断方块是否可被替换
 function isReplaceableBlock(block: any): boolean {
     if (!block) return false;
@@ -109,7 +108,19 @@ function findNeighborRefBlock(
 }
 
 export class PlaceBlockCommand extends PersistentCommand {
-    private readonly intervalTicks: number;
+    static actionName = 'placeBlock';
+    static description = '根据指定频率沿视线循环放置当前手持方块';
+    static paramsTemplate = [
+        {
+            name: 'intervalTicks',
+            type: 'number' as const,
+            required: false,
+            default: 5,
+            description: '放置间隔（游戏 tick）',
+        },
+    ];
+
+    private intervalTicks: number = 5;
 
     /**
      * @param sender           命令发送者
@@ -117,12 +128,18 @@ export class PlaceBlockCommand extends PersistentCommand {
      */
     constructor(sender: string, intervalTicksArg?: string) {
         super(sender);
-        const parsed = intervalTicksArg ? parseInt(intervalTicksArg, 10) : NaN;
-        this.intervalTicks = !isNaN(parsed) && parsed > 0 ? parsed : 5;
+        if (intervalTicksArg !== undefined) {
+            const parsed = parseInt(intervalTicksArg, 10);
+            if (!isNaN(parsed) && parsed > 0) this.intervalTicks = parsed;
+        }
     }
 
     async exec(context: IContext, signal: AbortSignal): Promise<void> {
         const bot = context.getBot();
+        // 支持从 IPC params 读取参数
+        if (this.params?.intervalTicks != null && this.params.intervalTicks > 0) {
+            this.intervalTicks = this.params.intervalTicks;
+        }
 
         while (!signal.aborted) {
             try {

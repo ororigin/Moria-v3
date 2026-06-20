@@ -1,15 +1,16 @@
 import type { IContext } from '../utils/IContext.js';
+import type { ActionParamDescriptor } from '../type/transport.js';
 
 // 命令基类
 export abstract class Command {
-    /** 该命令在 IPC action 中使用的名称（如 'mountMinecart'）。为 undefined 时不可通过 action API 触发 */
     static actionName?: string;
+    static description?: string;
+    static paramsTemplate?: ActionParamDescriptor[];
 
     constructor(sender: string) {
         this.sender = sender;
     }
     public sender: string;
-    /** 当命令由 IPC action 触发时，携带的结构化参数 */
     params?: Record<string, any>;
     abstract exec(context: IContext, signal?: AbortSignal): Promise<void>;
 }
@@ -20,6 +21,10 @@ export abstract class PersistentCommand extends Command {
 }
 
 export class TerminateCommand extends Command {
+    static actionName = 'taskkill';
+    static description = '中止当前正在执行的独占任务（attack / placeBlock 等）';
+    static paramsTemplate = [];
+
     async exec(context: IContext, signal?: AbortSignal): Promise<void> {
         // TerminateCommand 本身不执行逻辑，它通过 CommandHandler.addCommand 直接触发终止操作。
         // 实际执行在 CommandHandler 的 addCommand 分支中处理。

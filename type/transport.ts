@@ -47,3 +47,20 @@ export function isInternalData(data: any): data is InternalData {
         data.message !== null
     );
 }
+
+// Action 参数模板与描述
+
+export interface ActionParamDescriptor {
+    name: string;
+    type: 'string' | 'number' | 'boolean';
+    required: boolean;
+    description: string;
+    default?: string | number | boolean;
+}
+
+export interface ActionDescriptor {
+    action: string;
+    commandName: string;
+    description: string;
+    params: ActionParamDescriptor[];
+}

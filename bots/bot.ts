@@ -28,7 +28,7 @@ async function main() {
     const argvPass = process.argv[6];
 
     let config: Partial<BotRuntimeConfig> | null = null;
-    /** 是否拥有完整配置（来自 IPC init） */
+    //是否拥有完整配置
     let configured = false;
 
     // argv 提供完整连接参数
@@ -227,6 +227,13 @@ async function main() {
             // 查询配置状态
             case 'internal:configured':
                 sendOutput('internal', { internalType: 'configured', message: { configured } });
+                return;
+            // 查询 action 参数模板
+            case 'internal:actionSchemas':
+                sendOutput('internal', {
+                    internalType: 'actionSchemas',
+                    message: { schemas: CommandResolver.getActionDescriptors() },
+                });
                 return;
             // 父进程推送配置更新
             case 'config:push':

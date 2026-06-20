@@ -10,30 +10,45 @@ import {
     LookAtBlockCommand,
     PlaceBlockCommand,
 } from './commands/index.js';
+import type { ActionDescriptor } from '../type/transport.js';
 
-/** Command 构造函数类型 */
+//Command 构造函数类型
 type CommandConstructor = new (sender: string) => Command;
 
+//注册表条目
+interface ActionRegistryEntry {
+    ctor: CommandConstructor;
+    descriptor: ActionDescriptor;
+}
+
 export class CommandResolver {
-    /** Action 注册表：action name → Command 构造函数 */
-    private static actionRegistry = new Map<string, CommandConstructor>();
+    //Action 注册表
+    private static actionRegistry = new Map<string, ActionRegistryEntry>();
 
     /**
-     * 注册一个可通过 IPC action 触发的命令
+     * 注册命令
      * @param actionName  action 名称（如 'mountMinecart'）
      * @param ctor        命令构造函数
+     * @param descriptor  action 完整描述符（可选，自动从静态属性构建）
      */
-    static registerAction(actionName: string, ctor: CommandConstructor): void {
-        CommandResolver.actionRegistry.set(actionName, ctor);
+    static registerAction(
+        actionName: string,
+        ctor: CommandConstructor,
+        descriptor?: ActionDescriptor,
+    ): void {
+        CommandResolver.actionRegistry.set(actionName, { ctor, descriptor: descriptor! });
     }
 
-    /**
-     * 获取所有已注册的 action 描述列表
-     */
-    static getActionDescriptions(): Array<{ action: string; commandName: string }> {
-        return Array.from(CommandResolver.actionRegistry.entries()).map(
-            ([action, ctor]) => ({ action, commandName: ctor.name }),
-        );
+    //获取所有已注册 action 的完整描述符
+
+    static getActionDescriptors(): ActionDescriptor[] {
+        return Array.from(CommandResolver.actionRegistry.values()).map((e) => e.descriptor);
+    }
+
+    //根据 action 名称获取描述符
+
+    static getActionDescriptor(actionName: string): ActionDescriptor | undefined {
+        return CommandResolver.actionRegistry.get(actionName)?.descriptor;
     }
 
     private commandPrefix: string;
@@ -87,10 +102,10 @@ export class CommandResolver {
                 if (actionName === '1') return new MountMinecartCommand('');
                 if (actionName === '2') return new DismountCommand('');
 
-                const Ctor = CommandResolver.actionRegistry.get(actionName);
-                if (!Ctor) return null;
+                const entry = CommandResolver.actionRegistry.get(actionName);
+                if (!entry) return null;
 
-                const cmd = new Ctor('');
+                const cmd = new entry.ctor('');
                 if (json.params && typeof json.params === 'object') {
                     cmd.params = json.params;
                 }
@@ -110,12 +125,30 @@ export class CommandResolver {
     }
 }
 
-// ── 自动注册声明了 static actionName 的命令 ──
+//自动注册声明了 static actionName 的命令
+function buildDescriptor(
+    Ctor: new (sender: string) => Command,
+): ActionDescriptor | null {
+    const staticSide = Ctor as unknown as typeof Command;
+    const actionName = staticSide.actionName;
+    if (typeof actionName !== 'string') return null;
+    return {
+        action: actionName,
+        commandName: Ctor.name,
+        description: staticSide.description ?? '',
+        params: staticSide.paramsTemplate ?? [],
+    };
+}
+
 function registerActions(...commandClasses: (new (sender: string) => Command)[]): void {
     for (const Ctor of commandClasses) {
-        const actionName = (Ctor as unknown as typeof Command).actionName;
-        if (typeof actionName === 'string') {
-            CommandResolver.registerAction(actionName, Ctor as unknown as CommandConstructor);
+        const descriptor = buildDescriptor(Ctor);
+        if (descriptor) {
+            CommandResolver.registerAction(
+                descriptor.action,
+                Ctor as unknown as CommandConstructor,
+                descriptor,
+            );
         }
     }
 }
@@ -123,4 +156,11 @@ function registerActions(...commandClasses: (new (sender: string) => Command)[])
 registerActions(
     MountMinecartCommand,
     DismountCommand,
+    AttackCommand,
+    PlaceBlockCommand,
+    LookAtBlockCommand,
+    UseCommandCommand,
+    TpaCommand,
+    SayCommand,
+    TerminateCommand,
 );

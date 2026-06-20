@@ -4,20 +4,43 @@ import type { IContext } from '../../utils/IContext.js';
 import type { Bot } from 'mineflayer';
 import { Entity } from 'prismarine-entity';
 import { Vec3 } from 'vec3';
-import { getEyePosition, getLookDirection, isValidTarget, getEntityBounds } from '../utils/entity.js';
+import {
+    getEyePosition,
+    getLookDirection,
+    isValidTarget,
+    getEntityBounds,
+} from '../utils/entity.js';
 import { expandAABB, aabbInSearchBox, rayAABBIntersect } from '../utils/geometry.js';
 
 export class AttackCommand extends PersistentCommand {
-    private readonly intervalTicks: number;
+    static actionName = 'attack';
+    static description = '根据指定频率沿视线循环攻击';
+    static paramsTemplate = [
+        {
+            name: 'intervalTicks',
+            type: 'number' as const,
+            required: false,
+            default: 10,
+            description: '攻击间隔（游戏 tick）',
+        },
+    ];
+
+    private intervalTicks: number = 10;
 
     constructor(sender: string, intervalTicks?: string) {
         super(sender);
-        const parsed = intervalTicks ? parseInt(intervalTicks, 10) : NaN;
-        this.intervalTicks = !isNaN(parsed) && parsed > 0 ? parsed : 10;
+        if (intervalTicks !== undefined) {
+            const parsed = parseInt(intervalTicks, 10);
+            if (!isNaN(parsed) && parsed > 0) this.intervalTicks = parsed;
+        }
     }
 
     async exec(context: IContext, signal: AbortSignal): Promise<void> {
         const bot = context.getBot();
+        // 支持从 IPC params 读取参数
+        if (this.params?.intervalTicks != null && this.params.intervalTicks > 0) {
+            this.intervalTicks = this.params.intervalTicks;
+        }
 
         while (!signal.aborted) {
             // 攻击判定
