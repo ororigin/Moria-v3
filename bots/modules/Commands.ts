@@ -2,10 +2,15 @@ import type { IContext } from '../utils/IContext.js';
 
 // 命令基类
 export abstract class Command {
+    /** 该命令在 IPC action 中使用的名称（如 'mountMinecart'）。为 undefined 时不可通过 action API 触发 */
+    static actionName?: string;
+
     constructor(sender: string) {
         this.sender = sender;
     }
     public sender: string;
+    /** 当命令由 IPC action 触发时，携带的结构化参数 */
+    params?: Record<string, any>;
     abstract exec(context: IContext, signal?: AbortSignal): Promise<void>;
 }
 

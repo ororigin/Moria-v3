@@ -593,23 +593,19 @@ export class BotManager {
     /**
      * 向指定 Bot 子进程发送预设动作指令
      *
-     * 支持的动作索引：
-     *   '1' — 乘坐周围最近的矿车（MountMinecartCommand）
-     *   '2' — 停止骑乘（DismountCommand）
+     * action 名称由 bot 模块端通过 static actionName 注册，
+     * 可通过 params 传递可选的结构化参数。
      *
      * @param botId       Bot UUID
-     * @param actionIndex 动作索引（'1' 或 '2'）
-     * @returns 是否成功发送（false 表示 bot 未运行或动作索引无效）
+     * @param action      action 名称（如 'mountMinecart', 'dismount'）
+     * @param params      可选的结构化参数，传递给 bot 命令执行
+     * @returns 是否成功发送（false 表示 bot 未运行）
      */
-    async executeAction(botId: string, actionIndex: string): Promise<boolean> {
-        if (actionIndex !== "1" && actionIndex !== "2") {
-            this.logger?.sysLog(
-                "warn",
-                "BotManager",
-                `无效的动作索引: ${actionIndex}，仅支持 '1'（上矿车）或 '2'（下矿车）`,
-            );
-            return false;
-        }
+    async executeAction(
+        botId: string,
+        action: string,
+        params?: Record<string, any>,
+    ): Promise<boolean> {
         const entry = this.botProcesses[botId];
         if (!entry || !isProcessAlive(entry.process)) {
             this.logger?.sysLog(
@@ -621,13 +617,14 @@ export class BotManager {
         }
         const msg: M2CProcessTransportData = {
             type: "action",
-            index: actionIndex,
+            action,
+            ...(params && Object.keys(params).length > 0 ? { params } : {}),
         };
         entry.process.send(msg);
         this.logger?.sysLog(
             "info",
             "BotManager",
-            `动作 ${actionIndex} 已发送到 Bot ${botId}`,
+            `动作 ${action} 已发送到 Bot ${botId}`,
         );
         return true;
     }

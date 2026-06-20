@@ -21,9 +21,8 @@ export const sendCommandSchema = z.object({
 
 /** POST /api/bots/:id/action 请求体验证 */
 export const executeActionSchema = z.object({
-    action: z.enum(['1', '2'], {
-        message: "action 必须是 '1'（上矿车）或 '2'（下矿车）",
-    }),
+    action: z.string().min(1, 'action 为必填的动作名称'),
+    params: z.record(z.string(), z.any()).optional(),
 });
 
 /** GET /api/bots/:id/logs|chats 查询参数验证 */

@@ -11,7 +11,31 @@ import {
     PlaceBlockCommand,
 } from './commands/index.js';
 
+/** Command 构造函数类型 */
+type CommandConstructor = new (sender: string) => Command;
+
 export class CommandResolver {
+    /** Action 注册表：action name → Command 构造函数 */
+    private static actionRegistry = new Map<string, CommandConstructor>();
+
+    /**
+     * 注册一个可通过 IPC action 触发的命令
+     * @param actionName  action 名称（如 'mountMinecart'）
+     * @param ctor        命令构造函数
+     */
+    static registerAction(actionName: string, ctor: CommandConstructor): void {
+        CommandResolver.actionRegistry.set(actionName, ctor);
+    }
+
+    /**
+     * 获取所有已注册的 action 描述列表
+     */
+    static getActionDescriptions(): Array<{ action: string; commandName: string }> {
+        return Array.from(CommandResolver.actionRegistry.entries()).map(
+            ([action, ctor]) => ({ action, commandName: ctor.name }),
+        );
+    }
+
     private commandPrefix: string;
 
     constructor(commandPrefix: string = '!') {
@@ -57,10 +81,21 @@ export class CommandResolver {
             case 'chat':
                 if (json.msg) return new SayCommand('', json.msg);
                 return null;
-            case 'action':
-                if (json.index === '1') return new MountMinecartCommand('');
-                if (json.index === '2') return new DismountCommand('');
-                return null;
+            case 'action': {
+                const actionName = json.action || json.index;
+                // 向后兼容：旧格式 { type: 'action', index: '1' }
+                if (actionName === '1') return new MountMinecartCommand('');
+                if (actionName === '2') return new DismountCommand('');
+
+                const Ctor = CommandResolver.actionRegistry.get(actionName);
+                if (!Ctor) return null;
+
+                const cmd = new Ctor('');
+                if (json.params && typeof json.params === 'object') {
+                    cmd.params = json.params;
+                }
+                return cmd;
+            }
             case 'stop':
                 return {
                     type: 'privileged',
@@ -74,3 +109,18 @@ export class CommandResolver {
         }
     }
 }
+
+// ── 自动注册声明了 static actionName 的命令 ──
+function registerActions(...commandClasses: (new (sender: string) => Command)[]): void {
+    for (const Ctor of commandClasses) {
+        const actionName = (Ctor as unknown as typeof Command).actionName;
+        if (typeof actionName === 'string') {
+            CommandResolver.registerAction(actionName, Ctor as unknown as CommandConstructor);
+        }
+    }
+}
+
+registerActions(
+    MountMinecartCommand,
+    DismountCommand,
+);

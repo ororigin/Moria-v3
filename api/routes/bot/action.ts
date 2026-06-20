@@ -7,9 +7,12 @@ import { success, error } from '../../types/responses.js';
 /**
  * POST /api/bots/:id/action — 执行预设动作
  *
- * 支持的动作索引：
- *   '1' — 乘坐周围最近的矿车（MountMinecartCommand）
- *   '2' — 停止骑乘（DismountCommand）
+ * action 名称由 bot 模块端注册（通过 static actionName），
+ * 可通过 params 传递可选的结构化参数。
+ *
+ * 请求体示例：
+ *   { "action": "mountMinecart" }
+ *   { "action": "attack", "params": { "frequency": 5 } }
  */
 export default async function actionRoute(fastify: FastifyInstance): Promise<void> {
     fastify.post(
@@ -30,9 +33,8 @@ export default async function actionRoute(fastify: FastifyInstance): Promise<voi
             if (!botManager) return;
 
             const botId = request.params.id;
-
-            const action = request.body.action;
-            const successFlag = await botManager.executeAction(botId, action);
+            const { action, params } = request.body;
+            const successFlag = await botManager.executeAction(botId, action, params);
 
             if (!successFlag) {
                 return reply
