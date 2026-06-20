@@ -251,8 +251,7 @@ Bot 子进程实现了层次化的命令系统：
 Command (基类)
 ├── PersistentCommand (独占型 — 长期运行、可被中断)
 │   ├── AttackCommand          — 沿视线循环攻击实体
-│   ├── PlaceBlockCommand      — 沿视线循环放置方块
-│   └── MountMinecartCommand   — 乘坐周围最近的矿车
+│   └──  PlaceBlockCommand      — 沿视线循环放置方块
 │
 ├── Command (一次性 — 立即执行)
 │   ├── SayCommand             — 发送聊天消息
@@ -260,6 +259,7 @@ Command (基类)
 │   ├── DismountCommand        — 停止骑乘
 │   ├── UseCommandCommand      — 执行 Minecraft 指令
 │   ├── LookAtBlockCommand     — 视线看向指定坐标方块
+│   ├── MountMinecartCommand   — 乘坐周围最近的矿车
 │   └── HelpCommand            — 显示帮助信息
 │
 └── TerminateCommand (特权 — 中止当前独占任务)
