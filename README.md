@@ -251,7 +251,7 @@ Bot 子进程实现了层次化的命令系统：
 Command (基类)
 ├── PersistentCommand (独占型 — 长期运行、可被中断)
 │   ├── AttackCommand          — 沿视线循环攻击实体
-│   └──  PlaceBlockCommand      — 沿视线循环放置方块
+│   └── PlaceBlockCommand      — 沿视线循环放置方块
 │
 ├── Command (一次性 — 立即执行)
 │   ├── SayCommand             — 发送聊天消息
