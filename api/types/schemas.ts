@@ -33,13 +33,13 @@ export const linesQuerySchema = z.object({
 // Fastify JSON Schema
 
 /** createBotSchema 的 JSON Schema 版本（Fastify schema.body 用） */
-export const createBotJSONSchema = z.toJSONSchema(createBotSchema);
+export const createBotJSONSchema = z.toJSONSchema(createBotSchema, { target: 'draft-07' });
 
 /** sendCommandSchema 的 JSON Schema 版本 */
-export const sendCommandJSONSchema = z.toJSONSchema(sendCommandSchema);
+export const sendCommandJSONSchema = z.toJSONSchema(sendCommandSchema, { target: 'draft-07' });
 
 /** executeActionSchema 的 JSON Schema 版本 */
-export const executeActionJSONSchema = z.toJSONSchema(executeActionSchema);
+export const executeActionJSONSchema = z.toJSONSchema(executeActionSchema, { target: 'draft-07' });
 
 // 推导类型
 
@@ -70,7 +70,7 @@ export const updateBotConfigSchema = z.object({
 });
 
 /** updateBotConfigSchema 的 JSON Schema 版本 */
-export const updateBotConfigJSONSchema = z.toJSONSchema(updateBotConfigSchema);
+export const updateBotConfigJSONSchema = z.toJSONSchema(updateBotConfigSchema, { target: 'draft-07' });
 
 // 推导类型
 
