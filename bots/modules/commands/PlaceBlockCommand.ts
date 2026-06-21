@@ -9,10 +9,10 @@ import { waitForTicks } from '../utils/tick.js';
 //块交互距离（对应 Attributes.BLOCK_INTERACTION_RANGE）
 const BLOCK_INTERACTION_RANGE = 4.5;
 
-/** placeBlock 调用超时（ms），避免因服务器拒绝放置卡死 5 秒 */
-const PLACE_TIMEOUT_MS = 1500;
+//placeBlock 调用超时
+const PLACE_TIMEOUT_MS = 1000;
 
-/** 放置位置距眼睛的最小距离，避免在假人脚下/体内放置导致服务器拒绝 */
+//放置位置距眼睛的最小距离
 const MIN_PLACE_DIST = 0.5;
 
 //已知可替换方块的名称集合
