@@ -236,14 +236,6 @@ export class SystemMonitor implements ISystemMonitor {
     // ── 网络 I/O ───────────────────────────────────────────────────
 
     /**
-     * 计算网络 I/O 速率（bps）
-     *
-     * 使用 systeminformation 的 networkStats() 获取各网卡的累计字节数，
-     * 通过差值计算速率：`(bytesDelta / timeDelta) × 8`。
-     *
-     * 首次调用时缓存计数值并返回 0。
-     */
-    /**
      * PowerShell 降级方案：获取各网卡累计收发字节数（Windows 专用）
      *
      * systeminformation 在 Windows 上可能无法读取网卡统计，
