@@ -16,11 +16,7 @@ const PER_TICK_TIMEOUT_MS = 2000;
  * @param n      等待的 tick 数量
  * @param signal 可选的 AbortSignal，提前终止等待
  */
-export async function waitForTicks(
-    bot: Bot,
-    n: number,
-    signal?: AbortSignal,
-): Promise<void> {
+export async function waitForTicks(bot: Bot, n: number, signal?: AbortSignal): Promise<void> {
     for (let i = 0; i < n; i++) {
         if (signal?.aborted) return;
         await waitOneTick(bot, signal);
