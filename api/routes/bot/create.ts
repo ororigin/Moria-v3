@@ -27,9 +27,10 @@ export default async function createRoute(fastify: FastifyInstance): Promise<voi
 
             const { name, server, port, password } = request.body;
 
-            // 构造 BotConfig JSON
+            // 构造 BotConfig JSON（同时设置 host，确保连接使用正确的服务器地址）
             const configJson = JSON.stringify({
                 name: name.trim(),
+                host: server.trim(),
                 server: server.trim(),
                 port,
                 ...(password ? { password } : {}),

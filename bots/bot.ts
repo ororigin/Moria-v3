@@ -172,7 +172,7 @@ async function main() {
         sendOutput('chat', { message });
     };
 
-    // 创建 BotManager
+    // 创建 BotManager（传入本地 context，确保其 bot 属性同步更新）
     const botManager = new BotManager(
         cfg,
         dispatcher,
@@ -180,6 +180,7 @@ async function main() {
         botManagerSendLog,
         botManagerSendStatus,
         botManagerSendChat,
+        context,
     );
 
     // 父进程存活检测

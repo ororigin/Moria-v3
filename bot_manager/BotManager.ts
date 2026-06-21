@@ -151,12 +151,12 @@ export class BotManager {
         ) {
             // 传入 ConfigManagerFactory
             this.configFactory = configFactoryOrScriptPath;
-            this.botScriptPath = resolve(__dirname, "bots", "dist", "bot.js");
+            this.botScriptPath = resolve(__dirname, "..", "..", "bots", "dist", "bot.js");
         } else {
             // 兼容旧式调用：传入 botScriptPath（string）或不传
             this.botScriptPath =
                 (configFactoryOrScriptPath as string | undefined) ??
-                resolve(__dirname, "bots", "dist", "bot.js");
+                resolve(__dirname, "..", "..", "bots", "dist", "bot.js");
             // 如果没有 configFactory，startBot 无法工作，留到 startBot 时抛错
         }
     }

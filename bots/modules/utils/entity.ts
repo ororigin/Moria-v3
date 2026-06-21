@@ -13,17 +13,30 @@ export function getEyePosition(bot: Bot): Vec3 {
 
 /**
  * 从 yaw/pitch 计算视线方向单位向量。
- * 对应 cameraEntity.getViewVector(partialTicks)
+ *
+ * ⚠️ mineflayer 中 bot.entity.yaw / pitch 已经是弧度制（经由
+ *    fromNotchianYaw / fromNotchianPitch 转换），切勿再乘 PI/180。
+ *
+ * 对应 Minecraft 的 calculateViewVector(xRot, yRot)：
+ *   realYRot = -yRot_deg * PI/180
+ *   realXRot =  xRot_deg * PI/180
+ *   x = sin(realYRot) * cos(realXRot)
+ *   y = -sin(realXRot)
+ *   z = cos(realYRot) * cos(realXRot)
+ *
+ * 代入 mineflayer 关系：minecraftYawRad = PI - mineflayer_yaw,
+ * minecraftPitchRad = -mineflayer_pitch，化简得：
+ *   x = -sin(yaw) * cos(pitch)
+ *   y =  sin(pitch)
+ *   z = -cos(yaw) * cos(pitch)
  */
 export function getLookDirection(bot: Bot): Vec3 {
     const yaw = bot.entity.yaw;
     const pitch = bot.entity.pitch;
-    const yawRad = (yaw * Math.PI) / 180;
-    const pitchRad = (pitch * Math.PI) / 180;
     return new Vec3(
-        -Math.sin(yawRad) * Math.cos(pitchRad),
-        -Math.sin(pitchRad),
-        Math.cos(yawRad) * Math.cos(pitchRad),
+        -Math.sin(yaw) * Math.cos(pitch),
+        Math.sin(pitch),
+        -Math.cos(yaw) * Math.cos(pitch),
     );
 }
 

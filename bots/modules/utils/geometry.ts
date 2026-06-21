@@ -10,7 +10,7 @@ export function expandAABB(
     distance: number,
     inflate: number,
 ): { min: Vec3; max: Vec3 } {
-    const end = origin.plus(direction.scale(distance));
+    const end = origin.plus(direction.scaled(distance));
     const min = new Vec3(
         Math.min(origin.x, end.x) - inflate,
         Math.min(origin.y, end.y) - inflate,

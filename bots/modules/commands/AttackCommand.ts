@@ -11,6 +11,7 @@ import {
     getEntityBounds,
 } from '../utils/entity.js';
 import { expandAABB, aabbInSearchBox, rayAABBIntersect } from '../utils/geometry.js';
+import { waitForTicks } from '../utils/tick.js';
 
 export class AttackCommand extends PersistentCommand {
     static actionName = 'attack';
@@ -55,9 +56,7 @@ export class AttackCommand extends PersistentCommand {
             }
 
             // 等待 intervalTicks 个游戏 tick，检查终止信号
-            for (let i = 0; i < this.intervalTicks && !signal.aborted; i++) {
-                await bot.waitForTicks(1);
-            }
+            await waitForTicks(bot, this.intervalTicks, signal);
         }
     }
 
@@ -88,7 +87,7 @@ export class AttackCommand extends PersistentCommand {
         }
         // 构建搜索 AABB
         const searchDist = Math.sqrt(blockHitDistSq);
-        const searchEnd = eyePos.plus(lookDir.scale(searchDist));
+        const searchEnd = eyePos.plus(lookDir.scaled(searchDist));
         const searchBox = expandAABB(bot.entity.position, lookDir, searchDist, 1.0);
         // 实体射线检测
         let closestEntity: Entity | null = null;

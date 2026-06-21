@@ -8,6 +8,8 @@ export class BotManager {
     private reconnectTimer?: NodeJS.Timeout | null;
     private shouldExit = false;
     private context: IContext;
+    /** 外部上下文（bot.ts 中的本地 context），用于同步 bot 实例 */
+    private externalContext: IContext | null = null;
 
     constructor(
         private config: IContext["config"],
@@ -16,7 +18,9 @@ export class BotManager {
         private sendLog: (msg: string, isError?: boolean) => void = () => {},
         private sendStatus: (status: string) => void = () => {},
         private onChat: (message: string) => void = () => {},
+        externalContext?: IContext,
     ) {
+        this.externalContext = externalContext ?? null;
         this.context = {
             bot: null,
             config,
@@ -41,6 +45,9 @@ export class BotManager {
             });
             this.bot = bot;
             this.context.bot = bot;
+            if (this.externalContext) {
+                this.externalContext.bot = bot;
+            }
             this.bindEvents(bot);
         } catch (err) {
             this.scheduleReconnect();

@@ -4,9 +4,16 @@ import type { IContext } from '../../utils/IContext.js';
 import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
 import { getEyePosition, getLookDirection } from '../utils/entity.js';
+import { waitForTicks } from '../utils/tick.js';
 
 //块交互距离（对应 Attributes.BLOCK_INTERACTION_RANGE）
 const BLOCK_INTERACTION_RANGE = 4.5;
+
+/** placeBlock 调用超时（ms），避免因服务器拒绝放置卡死 5 秒 */
+const PLACE_TIMEOUT_MS = 1500;
+
+/** 放置位置距眼睛的最小距离，避免在假人脚下/体内放置导致服务器拒绝 */
+const MIN_PLACE_DIST = 0.5;
 
 //已知可替换方块的名称集合
 const REPLACEABLE_BLOCK_NAMES = new Set<string>([
@@ -58,7 +65,7 @@ function getHitFace(
         const t = planePoint.minus(eyePos).dot(normal) / denom;
         if (t < 0 || t > maxDistance) continue;
 
-        const hitPos = eyePos.plus(lookDir.scale(t));
+        const hitPos = eyePos.plus(lookDir.scaled(t));
 
         // 检查命中点是否在面的边界内（排除方块内部面）
         const eps = 1e-5;
@@ -107,6 +114,24 @@ function findNeighborRefBlock(
     return null;
 }
 
+/** 带超时的 placeBlock，避免 mineflayer 内部 5000ms 超时卡死循环 */
+async function placeBlockWithTimeout(
+    bot: Bot,
+    refBlock: any,
+    faceVector: Vec3,
+    timeoutMs: number,
+): Promise<void> {
+    await Promise.race([
+        (bot as any)._placeBlockWithOptions(refBlock, faceVector, {
+            swingArm: 'right',
+            forceLook: 'ignore',
+        }),
+        new Promise<void>((_, reject) =>
+            setTimeout(() => reject(new Error(`placeBlock 超时(${timeoutMs}ms)`)), timeoutMs),
+        ),
+    ]);
+}
+
 export class PlaceBlockCommand extends PersistentCommand {
     static actionName = 'placeBlock';
     static description = '根据指定频率沿视线循环放置当前手持方块';
@@ -136,69 +161,65 @@ export class PlaceBlockCommand extends PersistentCommand {
 
     async exec(context: IContext, signal: AbortSignal): Promise<void> {
         const bot = context.getBot();
-        // 支持从 IPC params 读取参数
         if (this.params?.intervalTicks != null && this.params.intervalTicks > 0) {
             this.intervalTicks = this.params.intervalTicks;
         }
 
         while (!signal.aborted) {
             try {
-                this.tryPlace(bot);
+                await this.tryPlace(bot);
             } catch (_err) {
-                // 单次放置失败不中断循环（如物品耗尽、网络抖动等）
+                // 单次放置失败不中断循环
             }
 
-            // 等待 intervalTicks 个游戏 tick，每 tick 检查终止信号
-            for (let i = 0; i < this.intervalTicks && !signal.aborted; i++) {
-                await bot.waitForTicks(1);
-            }
+            await waitForTicks(bot, this.intervalTicks, signal);
         }
     }
 
     /**
      * 单次放置逻辑：沿视线检测方块并尝试放置。
      */
-    private tryPlace(bot: Bot): void {
-        // 检查手持物品（需要有物品且不为空手）
+    private async tryPlace(bot: Bot): Promise<void> {
         const heldItem = bot.heldItem;
         if (!heldItem) return;
 
-        // 获取视线
         const eyePos = getEyePosition(bot);
         const lookDir = getLookDirection(bot);
 
-        // 检测视线方向的方块
         const hitBlock = bot.blockAtCursor(BLOCK_INTERACTION_RANGE);
         if (!hitBlock) return;
 
-        // 确定命中面
         const hitResult = getHitFace(eyePos, lookDir, hitBlock, BLOCK_INTERACTION_RANGE);
         if (!hitResult) return;
 
         const { faceVec } = hitResult;
         const isReplaceable = isReplaceableBlock(hitBlock);
 
-        // 计算 placeBlock 参数
         let refBlock: any;
         let faceVector: Vec3;
 
         if (isReplaceable) {
-            // 可替换方块
             const result = findNeighborRefBlock(bot, hitBlock.position, faceVec);
-            if (!result) return; // 无可用依附方块
+            if (!result) return;
             refBlock = result.refBlock;
             faceVector = result.faceVector;
         } else {
-            // 固体方块
             refBlock = hitBlock;
             faceVector = faceVec;
         }
 
-        //最终距离校验
+        // 距离校验
         const placePos = refBlock.position.plus(faceVector);
         const placeCenter = placePos.offset(0.5, 0.5, 0.5);
-        if (eyePos.distanceTo(placeCenter) > BLOCK_INTERACTION_RANGE) return;
+        const dist = eyePos.distanceTo(placeCenter);
+        if (dist > BLOCK_INTERACTION_RANGE || dist < MIN_PLACE_DIST) return;
 
-        bot.placeBlock(refBlock, faceVector);
+        // 检查目标位置是否已被占用
+        const existingBlock = bot.blockAt(placePos);
+        if (existingBlock && existingBlock.name !== 'air' && !isReplaceableBlock(existingBlock)) {
+            return;
+        }
+
+        await placeBlockWithTimeout(bot, refBlock, faceVector, PLACE_TIMEOUT_MS);
     }
 }
