@@ -1,9 +1,7 @@
 import { Vec3 } from 'vec3';
 
-/**
- * 构建搜索用 AABB。
- * 对应 source.getBoundingBox().expandTowards(direction * maxDistance).inflate(inflate)
- */
+//构建搜索用 AABB
+
 export function expandAABB(
     origin: Vec3,
     direction: Vec3,
@@ -24,9 +22,8 @@ export function expandAABB(
     return { min, max };
 }
 
-/**
- * 快速过滤：检查实体的 AABB 是否与搜索 AABB 相交
- */
+//检查实体的 AABB 是否与搜索 AABB 相交
+
 export function aabbInSearchBox(
     bb: { min: Vec3; max: Vec3 },
     searchBox: { min: Vec3; max: Vec3 },
@@ -43,7 +40,6 @@ export function aabbInSearchBox(
 
 /**
  * 射线-AABB 求交（Slab 方法）。
- * 对应 bb.clip(from, to) → Optional<Vec3>
  *
  * @returns 从射线起点到命中点的距离平方，若无交点返回 null
  */
