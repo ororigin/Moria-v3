@@ -85,6 +85,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
         await app.register(cors, {
             origin: options.allowedOrigins,
             credentials: true,
+            methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
         });
     }
 
