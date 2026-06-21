@@ -1,5 +1,6 @@
 import fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
+import cors from '@fastify/cors';
 import apiRoutes from './api/index.js';
 import legacyRoutes from './api/legacy/index.js';
 import type ILogger from './storage/log/ILogger.js';
@@ -24,6 +25,8 @@ export interface AppOptions {
     botManager?: BotManager;
     /** SystemMonitor 实例（系统性能监控） */
     systemMonitor?: SystemMonitor;
+    /** CORS 允许的跨域来源，来自 SystemConfig.allowedOrigins */
+    allowedOrigins?: string[];
 }
 
 // Fastify 实例类型扩展
@@ -75,6 +78,14 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
     // 注入 SystemMonitor 供路由使用
     if (options.systemMonitor) {
         app.decorate('systemMonitor', options.systemMonitor);
+    }
+
+    // 注册 CORS 插件
+    if (options.allowedOrigins && options.allowedOrigins.length > 0) {
+        await app.register(cors, {
+            origin: options.allowedOrigins,
+            credentials: true,
+        });
     }
 
     // 注册新 RESTful API 路由（/api 前缀）

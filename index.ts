@@ -30,6 +30,7 @@ async function main(): Promise<void> {
         version: systemConfig.version,
         port: systemConfig.port,
         botManager,
+        allowedOrigins: systemConfig.allowedOrigins,
     });
 
     // 启动监听
