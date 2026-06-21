@@ -1,9 +1,13 @@
 import os from 'node:os';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import si from 'systeminformation';
 import type { ISystemInfo } from './interfaces/ISystemInfo.js';
 import type { ISystemMonitor } from './interfaces/ISystemMonitor.js';
 import type ILogger from '../../storage/log/ILogger.js';
 import SimpleAsyncMutex from '../../utils/SimpleAsyncMutex.js';
+
+const execFileAsync = promisify(execFile);
 
 /**
  * 系统性能监控器实现
@@ -239,6 +243,33 @@ export class SystemMonitor implements ISystemMonitor {
      *
      * 首次调用时缓存计数值并返回 0。
      */
+    /**
+     * PowerShell 降级方案：获取各网卡累计收发字节数（Windows 专用）
+     *
+     * systeminformation 在 Windows 上可能无法读取网卡统计，
+     * 此方法通过 Get-NetAdapterStatistics 获取真实数据。
+     */
+    private async _getNetStatsViaPowerShell(): Promise<{ rxTotal: number; txTotal: number }> {
+        const { stdout } = await execFileAsync(
+            'powershell',
+            [
+                '-NoProfile',
+                '-Command',
+                'Get-NetAdapterStatistics | Select-Object Name, ReceivedBytes, SentBytes | ConvertTo-Json -Compress',
+            ],
+            { timeout: 5000 },
+        );
+        const adapters: { Name: string; ReceivedBytes: number; SentBytes: number }[] =
+            JSON.parse(stdout);
+        let rxTotal = 0;
+        let txTotal = 0;
+        for (const adapter of adapters) {
+            rxTotal += adapter.ReceivedBytes ?? 0;
+            txTotal += adapter.SentBytes ?? 0;
+        }
+        return { rxTotal, txTotal };
+    }
+
     private async _calcNetworkBps(): Promise<{
         uploadRateBps: number;
         downloadRateBps: number;
@@ -253,6 +284,21 @@ export class SystemMonitor implements ISystemMonitor {
             for (const iface of netStats) {
                 rxTotal += iface.rx_bytes;
                 txTotal += iface.tx_bytes;
+            }
+
+            // systeminformation 返回全零时，试 PowerShell 降级
+            if (rxTotal === 0 && txTotal === 0 && process.platform === 'win32') {
+                try {
+                    const ps = await this._getNetStatsViaPowerShell();
+                    rxTotal = ps.rxTotal;
+                    txTotal = ps.txTotal;
+                } catch (psErr) {
+                    this._logger?.sysLog(
+                        'warn',
+                        'SystemMonitor',
+                        `PowerShell 降级也失败: ${psErr}`,
+                    );
+                }
             }
         } catch (err) {
             this._logger?.sysLog('warn', 'SystemMonitor', `获取网络统计失败: ${err}`);
