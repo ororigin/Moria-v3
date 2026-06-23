@@ -3,7 +3,7 @@ import { PersistentCommand } from '../Commands.js';
 import type { IContext } from '../../utils/IContext.js';
 import type { Bot } from 'mineflayer';
 import { Vec3 } from 'vec3';
-import { getEyePosition, getLookDirection } from '../utils/entity.js';
+import { getEyePosition, getLookDirection, blockAtCursor } from '../utils/entity.js';
 import { waitForTicks } from '../utils/tick.js';
 
 //块交互距离（对应 Attributes.BLOCK_INTERACTION_RANGE）
@@ -186,7 +186,7 @@ export class PlaceBlockCommand extends PersistentCommand {
         const eyePos = getEyePosition(bot);
         const lookDir = getLookDirection(bot);
 
-        const hitBlock = bot.blockAtCursor(BLOCK_INTERACTION_RANGE);
+        const hitBlock = blockAtCursor(bot, BLOCK_INTERACTION_RANGE);
         if (!hitBlock) return;
 
         const hitResult = getHitFace(eyePos, lookDir, hitBlock, BLOCK_INTERACTION_RANGE);

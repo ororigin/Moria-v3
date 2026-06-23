@@ -9,6 +9,7 @@ import {
     getLookDirection,
     isValidTarget,
     getEntityBounds,
+    blockAtCursor,
 } from '../utils/entity.js';
 import { expandAABB, aabbInSearchBox, rayAABBIntersect } from '../utils/geometry.js';
 import { waitForTicks } from '../utils/tick.js';
@@ -75,7 +76,7 @@ export class AttackCommand extends PersistentCommand {
 
         //方块射线检测
         let blockHitDistSq = maxDistance * maxDistance;
-        const blockHit = bot.blockAtCursor(maxDistance);
+        const blockHit = blockAtCursor(bot, maxDistance);
         if (blockHit) {
             // 计算方块命中点到眼睛的距离
             const blockCenter = blockHit.position.offset(0.5, 0.5, 0.5);
