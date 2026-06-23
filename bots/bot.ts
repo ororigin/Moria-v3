@@ -12,14 +12,16 @@ import {
 
 // 配置初始化
 // 支持以下方式获取配置（按优先级）：
-//   1) argv 提供完整连接参数: node bot.js <botId> <name> <host> <port> [password]
+//   1) argv 提供完整连接参数: node bot.js <botId> <name> <host> <port> [password] [--no-heartbeat]
 //   2) 父进程 IPC 发送 { type: 'init', config: { ... } }
 //   3) argv 提供部分参数 + 默认值降级运行
 //
 // configured = true  ↔ 来自 IPC 的完整配置（含所有 BotRuntimeConfig 字段）
 // configured = false ↔ 仅 argv / 默认值，无完整配置文件
+// --no-heartbeat  关闭子进程侧的心跳超时检测（默认开启）。
 
 async function main() {
+    const heartbeatEnabled = !process.argv.includes('--no-heartbeat');
     //  尝试从 argv 解析
     const argvBotId = process.argv[2];
     const argvName = process.argv[3];
@@ -76,7 +78,7 @@ async function main() {
             } else {
                 // 无法启动
                 console.error('[bot] 错误: 未提供 botId 或 name，无法启动');
-                console.error('Usage: node bot.js <botId> <name> <host> <port> [password]');
+                console.error('Usage: node bot.js <botId> <name> <host> <port> [password] [--no-heartbeat]');
                 process.exit(1);
             }
         }
@@ -188,6 +190,7 @@ async function main() {
     let heartbeatTimeout: NodeJS.Timeout | null = null;
 
     function clearHeartbeatTimeout() {
+        if (!heartbeatEnabled) return;
         if (heartbeatTimeout) {
             clearTimeout(heartbeatTimeout);
             heartbeatTimeout = null;
@@ -195,6 +198,7 @@ async function main() {
     }
 
     function resetHeartbeatTimeout() {
+        if (!heartbeatEnabled) return;
         clearHeartbeatTimeout();
         heartbeatTimeout = setTimeout(() => {
             sendOutput('log', {
@@ -286,10 +290,17 @@ async function main() {
     // 启动
     botManager.start();
     sendOutput('log', {
-        message: `假人进程启动 - ${cfg.name} @ ${cfg.host}:${cfg.port} (configured=${configured})`,
+        message: `假人进程启动 - ${cfg.name} @ ${cfg.host}:${cfg.port} (configured=${configured}, heartbeat=${heartbeatEnabled})`,
         level: 'info',
     });
-    resetHeartbeatTimeout();
+    if (heartbeatEnabled) {
+        resetHeartbeatTimeout();
+    } else {
+        sendOutput('log', {
+            message: '心跳检测已禁用（--no-heartbeat）',
+            level: 'info',
+        });
+    }
 }
 
 // 启动主流程
